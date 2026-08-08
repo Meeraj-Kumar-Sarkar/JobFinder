@@ -18,7 +18,7 @@ interface EnvConfig {
 }
 
 const requiredEnv = [
-  "MONGO_URI",
+  "MONGODB_URI",
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
