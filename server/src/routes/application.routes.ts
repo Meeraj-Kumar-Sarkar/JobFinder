@@ -1,6 +1,10 @@
 import { Router } from "express";
 
-import { applyJob, updateStatus } from "../controllers/application.controller";
+import {
+  applyJob,
+  getMyApplications,
+  updateStatus,
+} from "../controllers/application.controller";
 
 import { authenticate } from "../middleware/authenticate";
 import { authorize } from "../middleware/authorize";
@@ -14,6 +18,8 @@ import {
 const router = Router();
 
 // Candidate
+router.get("/my", authenticate, authorize("candidate"), getMyApplications);
+
 router.post(
   "/",
   authenticate,
@@ -31,3 +37,4 @@ router.patch(
 );
 
 export default router;
+
