@@ -24,7 +24,7 @@ export interface IUser extends Document {
   savedJobs: Types.ObjectId[];
 
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt: Date;  
 }
 
 const UserSchema = new Schema<IUser>(

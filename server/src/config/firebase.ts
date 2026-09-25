@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getDatabase } from "firebase-admin/database"
 import { getStorage } from "firebase-admin/storage";
 
 import { env } from "./env";
@@ -12,12 +13,13 @@ if (!getApps().length) {
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
       privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
     }),
-    storageBucket: env.FIREBASE_STORAGE_BUCKET,
+    databaseURL:env.FIREBASE_DATABASE_URL
+    //storageBucket: env.FIREBASE_STORAGE_BUCKET,
   });
 }
 
 export const firebaseAuth = getAuth();
-
+export const firebaseDB= getDatabase();
 export const firestore = getFirestore();
 
-export const firebaseStorage = getStorage().bucket();
+//export const firebaseStorage = getStorage().bucket();
