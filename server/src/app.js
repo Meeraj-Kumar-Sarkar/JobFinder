@@ -1,6 +1,10 @@
 import express from "express";
 import cors from "cors";
 import applicationRoutes from "./routes/application.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import companyRoutes from "./routes/company.routes.js";
+import jobRoutes from "./routes/job.routes.js";
 import { create_newUser, update_newUser } from "./middleware/User.js";
 import { create_newJob } from "./middleware/Job.js";
 import {
@@ -24,7 +28,11 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Modular RESTful Application routes
+// Modular RESTful API routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/companies", companyRoutes);
+app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
 
 // Direct routes (backward-compatible)

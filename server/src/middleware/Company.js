@@ -20,12 +20,21 @@ export const create_company = async (req, res) => {
       industry,
       location,
       owner,
-      employees,
+      employees: employees || 1,
     });
+    if (owner) {
+      await User.findByIdAndUpdate(owner, {
+        company: company._id,
+        companyRole: "owner",
+        role: "employer",
+        userType: "institution",
+      });
+    }
     console.log("Company is added successfully!!");
-    return res.status(200).json({ message: "successfully added company" });
+    return res.status(200).json({ message: "successfully added company", companyId: company._id, company });
   } catch (e) {
     console.log("Error", e);
     return res.status(500).json({ message: "unsuccessfull" });
   }
 };
+

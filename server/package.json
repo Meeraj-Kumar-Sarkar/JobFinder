@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "node test_apis.js"
+    "test": "node test_apis.js && node test_auth_company_worker.js",
+    "test:auth": "node test_auth_company_worker.js",
+    "test:applications": "node test_apis.js"
   },
   "keywords": [],
   "author": "",

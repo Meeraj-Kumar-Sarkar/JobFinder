@@ -241,13 +241,33 @@ export class ApplicationService {
       throw new ServiceError(404, "Employer not found");
     }
 
+    // Enforce dynamic terms for company workers / HR
+    if (employer.role === "hr" || employer.companyRole === "hr") {
+      const termsStatus = employer.companyAccessTerms?.status;
+      const hasAccess = employer.companyAccessTerms?.hasAccess;
+      if (hasAccess === false || ["suspended", "revoked"].includes(termsStatus)) {
+        throw new ServiceError(
+          403,
+          `Access denied. Your company portal access is ${termsStatus || "inactive"}. Company terms have changed.`,
+        );
+      }
+    }
+
     // Find jobs created by employer or associated with employer's company
     const jobQuery = {
       $or: [{ createdBy: employer._id }],
     };
     if (employer.company) {
-      jobQuery.$or.push({ company: employer.company });
+      if (
+        (employer.role === "hr" || employer.companyRole === "hr") &&
+        employer.companyAccessTerms?.assignedJobs?.length > 0
+      ) {
+        jobQuery.$or.push({ _id: { $in: employer.companyAccessTerms.assignedJobs } });
+      } else {
+        jobQuery.$or.push({ company: employer.company });
+      }
     }
+
 
     const jobs = await Job.find(jobQuery).select("_id");
     const jobIds = jobs.map((j) => j._id);

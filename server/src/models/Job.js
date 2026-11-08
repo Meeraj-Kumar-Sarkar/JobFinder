@@ -43,6 +43,13 @@ const JobSchema = new Schema(
       ref: "User",
     },
 
+    assignedRecruiters: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
     status: {
       type: String,
       enum: ["active", "closed"],
