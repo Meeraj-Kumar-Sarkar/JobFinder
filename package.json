@@ -1,0 +1,15 @@
+{
+  "name": "job-portal-applicant-tracking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack Job Portal with Applicant Tracking System (ATS)",
+  "scripts": {
+    "start": "node server/src/server.js",
+    "dev": "cd server && nodemon src/server.js",
+    "server": "node server/src/server.js",
+    "server:dev": "cd server && nodemon src/server.js",
+    "client": "cd client && vite",
+    "client:build": "cd client && tsc -b && vite build",
+    "test:server": "cd server && node test_apis.js && node test_auth_company_worker.js"
+  }
+}

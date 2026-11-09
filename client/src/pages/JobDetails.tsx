@@ -1,258 +1,319 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import Navbar from "../components/Navbar";
+import { jobsApi, applicationsApi, type Job } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 function JobDetails() {
+  const { id } = useParams<{ id: string }>();
+  const { user, isAuthenticated } = useAuth();
+
+  const [job, setJob] = useState<Job | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [hasApplied, setHasApplied] = useState(false);
+
+  useEffect(() => {
+    const fetchJob = async () => {
+      if (!id) return;
+      setLoading(true);
+      setError("");
+
+      try {
+        const res = await jobsApi.getById(id);
+        const jobData = res.data?.job || res.data;
+        setJob(jobData);
+
+        // Check if current logged-in candidate already applied
+        if (isAuthenticated && user?.role === "candidate") {
+          try {
+            const appsRes = await applicationsApi.getMyApplications();
+            const myApps = appsRes.data?.applications || appsRes.data || [];
+            const applied = myApps.some(
+              (app: any) =>
+                (typeof app.job === "object" ? app.job?._id : app.job) === id,
+            );
+            setHasApplied(applied);
+          } catch {
+            // ignore check error
+          }
+        }
+      } catch (err: any) {
+        console.error("Error loading job:", err);
+        setError("Failed to load job details. The job may no longer exist.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJob();
+  }, [id, isAuthenticated, user]);
+
+  const formatSalary = (min?: number, max?: number) => {
+    if (!min && !max) return "Competitive Salary";
+    if (min && !max) return `From $${(min / 1000).toFixed(0)}k/year`;
+    if (!min && max) return `Up to $${(max / 1000).toFixed(0)}k/year`;
+    return `$${(min! / 1000).toFixed(0)}k - $${(max! / 1000).toFixed(0)}k/year`;
+  };
+
+  const company =
+    job && typeof job.company === "object" && job.company !== null
+      ? job.company
+      : null;
+  const companyName = company?.name || "Hiring Company";
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Navbar */}
-      <nav className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 font-bold text-white">
-              J
-            </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Navbar />
 
-            <div>
-              <h1 className="font-bold">JobFinder</h1>
-              <p className="text-xs text-slate-400">
-                Find your dream job
-              </p>
-            </div>
-          </Link>
+      <main className="flex-1 mx-auto max-w-7xl w-full px-6 py-10">
+        <Link
+          to="/jobs"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline mb-6"
+        >
+          ← Back to Jobs
+        </Link>
 
-          <div className="flex items-center gap-3">
+        {loading && (
+          <div className="space-y-6 animate-pulse">
+            <div className="h-40 rounded-3xl bg-white p-8 border border-slate-200" />
+            <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+              <div className="h-96 rounded-3xl bg-white border border-slate-200" />
+              <div className="h-96 rounded-3xl bg-white border border-slate-200" />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-3xl border border-red-200 bg-white p-12 text-center shadow-sm">
+            <div className="text-4xl">⚠️</div>
+            <h2 className="mt-4 text-2xl font-bold text-slate-900">Job Not Found</h2>
+            <p className="mt-2 text-sm text-slate-500">{error}</p>
             <Link
               to="/jobs"
-              className="rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50"
+              className="mt-6 inline-block rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-blue-700"
             >
-              ← Back to Jobs
+              Browse All Available Jobs
             </Link>
-
-            <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">
-              Sign Up
-            </button>
           </div>
-        </div>
-      </nav>
+        )}
 
-      {/* Main */}
-      <main className="mx-auto max-w-7xl px-6 py-12">
-        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-          {/* Left Side */}
-          <div>
-            {/* Job Header */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex gap-5">
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-3xl">
-                    💻
-                  </div>
+        {!loading && job && (
+          <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+            {/* Left Main Content */}
+            <div className="space-y-6">
+              {/* Header Card */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex gap-5">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-4xl shadow-sm">
+                      💼
+                    </div>
 
-                  <div>
-                    <h1 className="text-3xl font-bold">
-                      Frontend Developer
-                    </h1>
+                    <div>
+                      <h1 className="text-3xl font-extrabold text-slate-900 leading-tight">
+                        {job.title}
+                      </h1>
 
-                    <p className="mt-2 text-lg font-semibold text-blue-600">
-                      TechNova
-                    </p>
+                      <p className="mt-1 text-lg font-semibold text-blue-600">
+                        {companyName}
+                      </p>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-blue-50 px-3 py-2 text-xs text-blue-600">
-                        📍 Remote
-                      </span>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                          📍 {job.location}
+                        </span>
 
-                      <span className="rounded-full bg-green-50 px-3 py-2 text-xs text-green-600">
-                        💼 Full Time
-                      </span>
+                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                          💼 {job.jobType}
+                        </span>
 
-                      <span className="rounded-full bg-purple-50 px-3 py-2 text-xs text-purple-600">
-                        💰 $60k - $85k
-                      </span>
+                        <span className="rounded-full bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700">
+                          💰 {formatSalary(job.salaryMin, job.salaryMax)}
+                        </span>
+
+                        {job.category && (
+                          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                            📂 {job.category}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider shrink-0 ${
+                      job.status === "active"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {job.status === "active" ? "Active Opening" : "Closed"}
+                  </span>
                 </div>
-
-                <button className="text-2xl text-slate-400 transition hover:text-red-500">
-                  ♡
-                </button>
               </div>
+
+              {/* Description Card */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Job Description
+                </h2>
+                <div className="mt-5 text-sm leading-8 text-slate-600 whitespace-pre-line">
+                  {job.description}
+                </div>
+              </div>
+
+              {/* Requirements Card */}
+              {job.requirements && job.requirements.length > 0 && (
+                <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Required Skills & Qualifications
+                  </h2>
+
+                  <ul className="mt-5 space-y-3">
+                    {job.requirements.map((req, i) => (
+                      <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-xs font-bold">
+                          ✓
+                        </span>
+                        <span>{req}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Benefits Card */}
+              {job.benefits && job.benefits.length > 0 && (
+                <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Perks & Benefits
+                  </h2>
+
+                  <ul className="mt-5 space-y-3">
+                    {job.benefits.map((b, i) => (
+                      <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-xs font-bold">
+                          ★
+                        </span>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {/* Job Description */}
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-8">
-              <h2 className="text-2xl font-bold">
-                Job Description
-              </h2>
+            {/* Right Sidebar */}
+            <div className="space-y-6">
+              {/* Apply Action Card */}
+              <div className="sticky top-24 rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+                <h2 className="text-xl font-bold text-slate-900">
+                  Ready to Apply?
+                </h2>
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                  Submit your application directly to {companyName}'s hiring team.
+                </p>
 
-              <p className="mt-5 leading-8 text-slate-600">
-                We are looking for a talented Frontend Developer to join our
-                growing team. You will work closely with designers and backend
-                developers to build beautiful, modern and high-performance web
-                applications.
-              </p>
+                {hasApplied ? (
+                  <div className="mt-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center">
+                    <p className="text-sm font-bold text-emerald-800">
+                      ✓ Application Submitted
+                    </p>
+                    <p className="text-xs text-emerald-600 mt-1">
+                      You have already applied for this role.
+                    </p>
+                    <Link
+                      to="/dashboard"
+                      className="mt-3 block text-xs font-semibold text-blue-600 hover:underline"
+                    >
+                      Track Application in Dashboard →
+                    </Link>
+                  </div>
+                ) : user?.role === "employer" ? (
+                  <div className="mt-6 rounded-2xl bg-blue-50 border border-blue-200 p-4 text-center">
+                    <p className="text-xs text-blue-800 font-semibold">
+                      You are logged in as an Employer.
+                    </p>
+                    <Link
+                      to="/employer/dashboard"
+                      className="mt-2 block text-xs font-bold text-blue-600 hover:underline"
+                    >
+                      Go to Employer Dashboard →
+                    </Link>
+                  </div>
+                ) : (
+                  <Link
+                    to={`/apply/${job._id}`}
+                    className="mt-6 block w-full rounded-xl bg-blue-600 py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                  >
+                    Apply for this Job →
+                  </Link>
+                )}
 
-              <p className="mt-4 leading-8 text-slate-600">
-                You will have the opportunity to work on exciting projects,
-                learn new technologies and help build products used by thousands
-                of people.
-              </p>
-            </div>
+                {/* Job Overview List */}
+                <div className="mt-6 border-t border-slate-100 pt-6 space-y-4 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Location:</span>
+                    <span className="font-semibold text-slate-900">{job.location}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Job Type:</span>
+                    <span className="font-semibold text-slate-900">{job.jobType}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Experience:</span>
+                    <span className="font-semibold text-slate-900">
+                      {job.experience ? `${job.experience}+ Years` : "Open to All"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Category:</span>
+                    <span className="font-semibold text-slate-900">{job.category || "General"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Applicants:</span>
+                    <span className="font-semibold text-slate-900">
+                      {job.applicants || 0} applied
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-            {/* Responsibilities */}
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-8">
-              <h2 className="text-2xl font-bold">
-                Responsibilities
-              </h2>
+              {/* Company Info Card */}
+              {company && (
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-2xl">
+                      🏢
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900">{company.name}</h3>
+                      <p className="text-xs text-slate-500">{company.industry || "Technology"}</p>
+                    </div>
+                  </div>
 
-              <ul className="mt-6 space-y-4 text-slate-600">
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Build responsive and modern user interfaces.
-                </li>
+                  {company.description && (
+                    <p className="mt-4 text-xs leading-relaxed text-slate-600">
+                      {company.description}
+                    </p>
+                  )}
 
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Work closely with designers and backend developers.
-                </li>
-
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Write clean and maintainable React code.
-                </li>
-
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Improve application performance and user experience.
-                </li>
-              </ul>
-            </div>
-
-            {/* Requirements */}
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-8">
-              <h2 className="text-2xl font-bold">
-                Requirements
-              </h2>
-
-              <ul className="mt-6 space-y-4 text-slate-600">
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  2+ years of experience with React.
-                </li>
-
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Strong knowledge of JavaScript and TypeScript.
-                </li>
-
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Experience with Tailwind CSS.
-                </li>
-
-                <li className="flex gap-3">
-                  <span className="text-blue-600">✓</span>
-                  Good communication and teamwork skills.
-                </li>
-              </ul>
+                  {company.website && (
+                    <a
+                      href={company.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-block text-xs font-semibold text-blue-600 hover:underline"
+                    >
+                      Visit Company Website ↗
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Right Sidebar */}
-          <div>
-            {/* Apply Card */}
-            <div className="sticky top-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
-              <h2 className="text-xl font-bold">
-                Interested in this job?
-              </h2>
-
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                Apply now and take the next step in your career.
-              </p>
-
-              {/* Apply Now - Connected to Apply Page */}
-              <Link
-                to="/apply"
-                className="mt-6 block w-full rounded-xl bg-blue-600 px-5 py-4 text-center font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
-              >
-                Apply Now
-              </Link>
-
-              <button className="mt-3 w-full rounded-xl border border-slate-200 px-5 py-4 font-semibold text-slate-600 transition hover:bg-slate-50">
-                Save Job
-              </button>
-
-              <p className="mt-5 text-center text-xs text-slate-400">
-                Posted 2 days ago
-              </p>
-            </div>
-
-            {/* Job Overview */}
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6">
-              <h2 className="text-xl font-bold">
-                Job Overview
-              </h2>
-
-              <div className="mt-6 space-y-5">
-                <div className="flex items-center gap-4">
-                  <span className="text-xl">📍</span>
-                  <div>
-                    <p className="text-xs text-slate-400">Location</p>
-                    <p className="font-semibold">Remote</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <span className="text-xl">💼</span>
-                  <div>
-                    <p className="text-xs text-slate-400">Job Type</p>
-                    <p className="font-semibold">Full Time</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <span className="text-xl">💰</span>
-                  <div>
-                    <p className="text-xs text-slate-400">Salary</p>
-                    <p className="font-semibold">$60k - $85k</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <span className="text-xl">📅</span>
-                  <div>
-                    <p className="text-xs text-slate-400">Deadline</p>
-                    <p className="font-semibold">30 March, 2026</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Company */}
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 text-2xl">
-                  💻
-                </div>
-
-                <div>
-                  <h3 className="font-bold">TechNova</h3>
-                  <p className="text-sm text-slate-400">
-                    Technology Company
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-5 text-sm leading-6 text-slate-500">
-                We build modern digital products and create amazing experiences
-                for users around the world.
-              </p>
-
-              <button className="mt-5 text-sm font-semibold text-blue-600">
-                View Company →
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );

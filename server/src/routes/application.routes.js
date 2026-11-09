@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { applicationController } from "../controllers/application.controller.js";
+import { optionalAuth } from "../middleware/auth.middleware.js";
 
 const router = Router();
+
+// Automatically attach authenticated user if token is present
+router.use(optionalAuth);
 
 // Candidate: Apply for a job
 router.post("/", (req, res) => applicationController.createApplication(req, res));

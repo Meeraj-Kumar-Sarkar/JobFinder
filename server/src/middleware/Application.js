@@ -19,7 +19,7 @@ export const create_newApplication = async (req, res) => {
       jobId,
       resumeURL,
       coverLetter,
-      bypassSkillCheck: Boolean(bypassSkillCheck),
+      bypassSkillCheck: bypassSkillCheck !== undefined ? Boolean(bypassSkillCheck) : true,
     });
 
     return res.status(200).json({

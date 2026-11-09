@@ -10,7 +10,12 @@ const JobSchema = new Schema(
     company: {
       type: Schema.Types.ObjectId,
       ref: "Company",
-      required: true,
+      required: false,
+    },
+
+    category: {
+      type: String,
+      default: "Technology",
     },
 
     description: String,

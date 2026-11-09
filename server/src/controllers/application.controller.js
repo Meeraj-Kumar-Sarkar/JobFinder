@@ -52,7 +52,7 @@ export class ApplicationController {
         jobId,
         resumeURL,
         coverLetter,
-        bypassSkillCheck: Boolean(bypassSkillCheck),
+        bypassSkillCheck: bypassSkillCheck !== undefined ? Boolean(bypassSkillCheck) : true,
       });
 
       return res.status(201).json(

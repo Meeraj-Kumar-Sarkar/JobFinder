@@ -13,6 +13,7 @@ export class JobService {
     const {
       title,
       company: companyId,
+      category = "Technology",
       description,
       requirements = [],
       benefits = [],
@@ -28,18 +29,32 @@ export class JobService {
       throw new ServiceError(400, "Job title is required");
     }
 
-    const effectiveCompanyId = companyId || callerUser?.company;
-    if (!effectiveCompanyId || !isValidObjectId(effectiveCompanyId)) {
-      throw new ServiceError(400, "Valid Company ID is required to post a job");
+    let effectiveCompanyId = companyId || callerUser?.company;
+    let company = null;
+
+    if (effectiveCompanyId && isValidObjectId(effectiveCompanyId)) {
+      company = await Company.findById(effectiveCompanyId);
     }
 
-    const company = await Company.findById(effectiveCompanyId);
-    if (!company) {
-      throw new ServiceError(404, "Company not found");
+    if (!company && callerUser) {
+      // Auto-provision company for employer if not yet created
+      company = await Company.findOne({ owner: callerUser._id });
+      if (!company && (callerUser.role === "employer" || callerUser.role === "hr")) {
+        company = await Company.create({
+          name: `${callerUser.name}'s Company`,
+          owner: callerUser._id,
+          location: location?.trim() || "Remote",
+          industry: category?.trim() || "Technology",
+          contactEmail: callerUser.email,
+        });
+        callerUser.company = company._id;
+        callerUser.companyRole = "owner";
+        await callerUser.save();
+      }
     }
 
-    // Access control check if callerUser is provided
-    if (callerUser) {
+    // Access control check if callerUser is provided and company exists
+    if (callerUser && company) {
       const isOwner = company.owner.toString() === callerUser._id.toString();
       if (!isOwner) {
         // Must be an active worker of this company with permission
@@ -47,7 +62,7 @@ export class JobService {
           throw new ServiceError(403, "You do not belong to this company");
         }
 
-        const workerRecord = company.workers.find(
+        const workerRecord = (company.workers || []).find(
           (w) => w.user.toString() === callerUser._id.toString(),
         );
         const status = workerRecord ? workerRecord.status : callerUser.companyAccessTerms?.status;
@@ -65,11 +80,12 @@ export class JobService {
       }
     }
 
-    const creatorId = callerUser?._id || createdBy || company.owner;
+    const creatorId = callerUser?._id || createdBy || company?.owner;
 
     const job = await Job.create({
       title: title.trim(),
-      company: company._id,
+      company: company ? company._id : undefined,
+      category: category?.trim() || "Technology",
       description: description?.trim() || "",
       requirements: Array.isArray(requirements) ? requirements : [],
       benefits: Array.isArray(benefits) ? benefits : [],
@@ -92,22 +108,55 @@ export class JobService {
    */
   async getJobs(filter = {}) {
     const query = {};
+
     if (filter.company && isValidObjectId(filter.company)) {
       query.company = filter.company;
     }
-    if (filter.status) {
+
+    if (filter.createdBy && isValidObjectId(filter.createdBy)) {
+      if (query.company) {
+        query.$or = [{ createdBy: filter.createdBy }, { company: filter.company }];
+        delete query.company;
+      } else {
+        query.createdBy = filter.createdBy;
+      }
+    }
+
+    if (filter.status === "all" || filter.status === "any") {
+      // Do not filter by status
+    } else if (filter.status) {
       query.status = filter.status;
     } else {
       query.status = "active";
     }
-    if (filter.jobType) {
+
+    if (filter.category && filter.category !== "All") {
+      query.category = filter.category;
+    }
+
+    if (filter.location && filter.location.trim()) {
+      query.location = { $regex: filter.location.trim(), $options: "i" };
+    }
+
+    if (filter.jobType && filter.jobType !== "All") {
       query.jobType = filter.jobType;
     }
-    if (filter.search) {
+
+    if (filter.search && filter.search.trim()) {
+      const term = filter.search.trim();
       query.$or = [
-        { title: { $regex: filter.search, $options: "i" } },
-        { description: { $regex: filter.search, $options: "i" } },
+        { title: { $regex: term, $options: "i" } },
+        { description: { $regex: term, $options: "i" } },
       ];
+    }
+
+    let sortOption = { createdAt: -1 };
+    if (filter.sort === "title") {
+      sortOption = { title: 1 };
+    } else if (filter.sort === "salary") {
+      sortOption = { salaryMax: -1, salaryMin: -1 };
+    } else if (filter.sort === "newest") {
+      sortOption = { createdAt: -1 };
     }
 
     const page = Math.max(1, Number(filter.page) || 1);
@@ -118,7 +167,7 @@ export class JobService {
       Job.find(query)
         .populate("company", "name logo industry location")
         .populate("assignedRecruiters", "name email")
-        .sort({ createdAt: -1 })
+        .sort(sortOption)
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -198,10 +247,12 @@ export class JobService {
     }
 
     if (callerUser) {
-      const company = await Company.findById(job.company);
-      const isOwner = company && company.owner.toString() === callerUser._id.toString();
+      const company = job.company ? await Company.findById(job.company) : null;
+      const isOwner =
+        (company && company.owner.toString() === callerUser._id.toString()) ||
+        job.createdBy?.toString() === callerUser._id.toString();
       const isAssigned =
-        job.assignedRecruiters.some((r) => r.toString() === callerUser._id.toString()) ||
+        job.assignedRecruiters?.some((r) => r.toString() === callerUser._id.toString()) ||
         callerUser.companyAccessTerms?.assignedJobs?.some(
           (j) => j.toString() === job._id.toString(),
         );
@@ -213,6 +264,7 @@ export class JobService {
 
     const allowed = [
       "title",
+      "category",
       "description",
       "requirements",
       "benefits",

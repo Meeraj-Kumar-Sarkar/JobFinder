@@ -1,47 +1,88 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 function Signup() {
+  const [role, setRole] = useState<"candidate" | "employer">("candidate");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [signedUp, setSignedUp] = useState(false);
 
-  if (signedUp) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <div className="w-full max-w-md rounded-3xl bg-white p-10 text-center shadow-xl">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-4xl">
-            ✓
-          </div>
+  // Candidate fields
+  const [headline, setHeadline] = useState("");
+  const [skills, setSkills] = useState("");
+  const [experience, setExperience] = useState(1);
+  const [resumeURL, setResumeURL] = useState("");
 
-          <h1 className="mt-6 text-3xl font-bold text-slate-900">
-            Account Created!
-          </h1>
+  // Employer fields
+  const [companyName, setCompanyName] = useState("");
+  const [companyIndustry, setCompanyIndustry] = useState("Technology");
+  const [companyLocation, setCompanyLocation] = useState("Remote");
+  const [companyWebsite, setCompanyWebsite] = useState("");
 
-          <p className="mt-3 leading-7 text-slate-500">
-            Welcome to JobFinder! Your account has been created successfully.
-          </p>
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-          <Link
-            to="/"
-            className="mt-8 block rounded-xl bg-blue-600 px-6 py-4 font-bold text-white transition hover:bg-blue-700"
-          >
-            Start Finding Jobs →
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSubmitting(true);
+
+    try {
+      const payload: Record<string, any> = {
+        name,
+        email,
+        password,
+        role,
+        userType: role === "employer" ? "institution" : "worker",
+      };
+
+      if (role === "candidate") {
+        payload.headline = headline || "Software Developer";
+        payload.skills = skills
+          ? skills.split(",").map((s) => s.trim()).filter(Boolean)
+          : ["React", "JavaScript"];
+        payload.experience = Number(experience) || 0;
+        payload.resumeURL =
+          resumeURL.trim() || `https://example.com/resumes/${email.split("@")[0]}.pdf`;
+      } else {
+        payload.companyName = companyName || `${name}'s Company`;
+        payload.companyIndustry = companyIndustry;
+        payload.companyLocation = companyLocation;
+        payload.companyWebsite = companyWebsite;
+      }
+
+      const registeredUser = await register(payload);
+      toast.success(`Account created! Welcome, ${registeredUser.name}!`);
+
+      if (registeredUser.role === "employer") {
+        navigate("/employer/dashboard");
+      } else {
+        navigate("/dashboard");
+      }
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message || "Registration failed. Please try again.";
+      setErrorMessage(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl lg:grid-cols-2">
-        
         {/* Left Side */}
         <div className="hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-12 text-white lg:flex lg:flex-col lg:justify-between">
           <Link to="/" className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white font-bold text-blue-600">
-              J
+              💼
             </div>
 
             <div>
@@ -53,176 +94,263 @@ function Signup() {
           </Link>
 
           <div>
-            <p className="text-sm font-bold text-blue-200">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-200">
               START YOUR JOURNEY
             </p>
 
             <h2 className="mt-3 text-4xl font-bold leading-tight">
-              Your dream career starts here.
+              Create an account with JobFinder.
             </h2>
 
             <p className="mt-5 leading-7 text-blue-100">
-              Create your account, discover new opportunities and take the
-              next step toward your future.
+              Whether you are searching for your next career move or looking to hire
+              world-class talent, JobFinder connects talent with top employers.
             </p>
 
             <div className="mt-8 space-y-3 text-sm text-blue-100">
-              <p>✓ Explore thousands of jobs</p>
-              <p>✓ Save your favorite opportunities</p>
-              <p>✓ Apply quickly and easily</p>
+              <p>✓ Access verified job postings & top companies</p>
+              <p>✓ Real-time applicant tracking & pipeline status</p>
+              <p>✓ Fast direct applications & instant notifications</p>
             </div>
           </div>
 
-          <p className="text-sm text-blue-200">
-            © 2026 JobFinder
-          </p>
+          <p className="text-sm text-blue-200">© 2026 JobFinder Portal</p>
         </div>
 
         {/* Right Side */}
         <div className="p-8 sm:p-12">
-          <Link
-            to="/"
-            className="text-sm font-semibold text-blue-600 lg:hidden"
-          >
+          <Link to="/" className="text-sm font-semibold text-blue-600 lg:hidden">
             ← Back to Home
           </Link>
 
-          <div className="mt-8 lg:mt-0">
-            <p className="text-sm font-bold text-blue-600">
-              CREATE ACCOUNT
-            </p>
-
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              Join JobFinder
+          <div className="mt-6 lg:mt-0">
+            <h2 className="text-3xl font-bold text-slate-900">
+              Create an Account
             </h2>
-
-            <p className="mt-3 text-slate-500">
-              Create an account and start finding your future.
+            <p className="mt-1 text-sm text-slate-500">
+              Choose your account type to get started.
             </p>
           </div>
 
-          <form
-            className="mt-8 space-y-5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSignedUp(true);
-            }}
-          >
-            {/* Full Name */}
+          {/* Role selector tabs */}
+          <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
+            <button
+              type="button"
+              onClick={() => setRole("candidate")}
+              className={`rounded-xl py-2.5 text-xs font-bold transition ${
+                role === "candidate"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              👤 Job Seeker (Candidate)
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("employer")}
+              className={`rounded-xl py-2.5 text-xs font-bold transition ${
+                role === "employer"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              🏢 Employer / Company
+            </button>
+          </div>
+
+          {errorMessage && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              ⚠️ {errorMessage}
+            </div>
+          )}
+
+          <form className="mt-5 space-y-4" onSubmit={handleSignup}>
             <div>
-              <label className="font-semibold text-slate-700">
+              <label className="text-xs font-semibold text-slate-700">
                 Full Name
               </label>
-
               <input
                 required
                 type="text"
-                placeholder="Enter your full name"
-                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Alex Morgan"
+                className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
-            {/* Email */}
             <div>
-              <label className="font-semibold text-slate-700">
+              <label className="text-xs font-semibold text-slate-700">
                 Email Address
               </label>
-
               <input
                 required
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
-            {/* Password */}
             <div>
-              <label className="font-semibold text-slate-700">
-                Password
+              <label className="text-xs font-semibold text-slate-700">
+                Password (min 6 characters)
               </label>
-
-              <div className="relative mt-2">
+              <div className="relative mt-1">
                 <input
                   required
                   type={showPassword ? "text" : "password"}
-                  placeholder="Create a password"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a secure password"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-10 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
-
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
               </div>
             </div>
 
-            {/* Confirm Password */}
-            <div>
-              <label className="font-semibold text-slate-700">
-                Confirm Password
-              </label>
+            {/* Candidate-specific fields */}
+            {role === "candidate" ? (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Professional Headline
+                  </label>
+                  <input
+                    type="text"
+                    value={headline}
+                    onChange={(e) => setHeadline(e.target.value)}
+                    placeholder="e.g. Full Stack Developer / React Specialist"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
 
-              <div className="relative mt-2">
-                <input
-                  required
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Confirm your password"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Skills (comma separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={skills}
+                      onChange={(e) => setSkills(e.target.value)}
+                      placeholder="React, Node.js, TS"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowConfirmPassword(!showConfirmPassword)
-                  }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                >
-                  {showConfirmPassword ? "🙈" : "👁️"}
-                </button>
-              </div>
-            </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Years of Experience
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={40}
+                      value={experience}
+                      onChange={(e) => setExperience(Number(e.target.value))}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
 
-            {/* Terms */}
-            <label className="flex cursor-pointer items-start gap-2 text-sm leading-5 text-slate-500">
-              <input
-                required
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-              />
-              <span>
-                I agree to the Terms of Service and Privacy Policy.
-              </span>
-            </label>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Resume Link (PDF URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={resumeURL}
+                    onChange={(e) => setResumeURL(e.target.value)}
+                    placeholder="https://example.com/my-resume.pdf"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+              </>
+            ) : (
+              /* Employer-specific fields */
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Company Name
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g. Acme Innovations Inc."
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
 
-            {/* Submit */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Industry
+                    </label>
+                    <select
+                      value={companyIndustry}
+                      onChange={(e) => setCompanyIndustry(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 bg-white"
+                    >
+                      <option value="Technology">Technology</option>
+                      <option value="Design">Design</option>
+                      <option value="Marketing">Marketing</option>
+                      <option value="Business">Business</option>
+                      <option value="Healthcare">Healthcare</option>
+                      <option value="Finance">Finance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      value={companyLocation}
+                      onChange={(e) => setCompanyLocation(e.target.value)}
+                      placeholder="e.g. Remote or New York"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Company Website (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={companyWebsite}
+                    onChange={(e) => setCompanyWebsite(e.target.value)}
+                    placeholder="https://company.example.com"
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500"
+                  />
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 hover:shadow-xl"
+              disabled={submitting}
+              className="mt-2 w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 hover:shadow-xl disabled:opacity-50"
             >
-              Create Account →
+              {submitting ? "Creating Account..." : "Create Account →"}
             </button>
           </form>
 
-          <div className="my-7 flex items-center gap-3">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs text-slate-400">OR</span>
-            <div className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          <button className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 py-3 font-semibold text-slate-700 transition hover:bg-slate-50">
-            🔵 Continue with Google
-          </button>
-
-          <p className="mt-7 text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-sm text-slate-500">
             Already have an account?{" "}
-            <Link
-              to="/login"
-              className="font-semibold text-blue-600 hover:underline"
-            >
+            <Link to="/login" className="font-semibold text-blue-600 hover:underline">
               Sign In
             </Link>
           </p>

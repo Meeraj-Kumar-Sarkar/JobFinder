@@ -13,13 +13,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.20.0",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "dependencies": {
     "@firebase/app": "^0.16.1",

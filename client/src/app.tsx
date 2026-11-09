@@ -1,5 +1,7 @@
-
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
+import { AuthProvider } from "./context/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
 import Jobs from "./pages/Jobs";
@@ -7,36 +9,62 @@ import JobDetails from "./pages/JobDetails";
 import Apply from "./pages/Apply";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-
 import CandidateDashboard from "./pages/CandidateDashboard";
 import EmployerDashboard from "./pages/EmployerDashboard";
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            borderRadius: "12px",
+            background: "#1e293b",
+            color: "#fff",
+            fontSize: "14px",
+          },
+        }}
+      />
+      <BrowserRouter>
+        <Routes>
+          {/* Public Pages */}
+          <Route path="/" element={<Home />} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/jobs/:id" element={<JobDetails />} />
+          <Route path="/job-details" element={<Navigate to="/jobs" replace />} />
+          <Route path="/job-details/:id" element={<JobDetails />} />
+          <Route path="/apply" element={<Apply />} />
+          <Route path="/apply/:id" element={<Apply />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
 
-        {/* Main Pages */}
-        <Route path="/" element={<Home />} />
-        <Route path="/jobs" element={<Jobs />} />
-        <Route path="/job-details" element={<JobDetails />} />
-        <Route path="/apply" element={<Apply />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+          {/* Protected Candidate Dashboard */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRole="candidate">
+                <CandidateDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Dashboard Pages */}
-        <Route
-          path="/dashboard"
-          element={<CandidateDashboard />}
-        />
+          {/* Protected Employer Dashboard */}
+          <Route
+            path="/employer/dashboard"
+            element={
+              <ProtectedRoute allowedRole="employer">
+                <EmployerDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/employer/dashboard"
-          element={<EmployerDashboard />}
-        />
-
-      </Routes>
-    </BrowserRouter>
+          {/* Fallback route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

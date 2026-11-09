@@ -173,9 +173,10 @@ export class AuthService {
 
     // If registering as an institution / employer and company info is provided, create the Company
     let createdCompany = null;
-    if (normalizedRole === "employer" && companyName) {
+    if (normalizedRole === "employer") {
+      const targetCompanyName = companyName?.trim() || `${name.trim()}'s Company`;
       createdCompany = await Company.create({
-        name: companyName.trim(),
+        name: targetCompanyName,
         description: companyDescription?.trim() || "",
         industry: companyIndustry?.trim() || "Technology",
         location: companyLocation?.trim() || "Remote",
@@ -253,9 +254,15 @@ export class AuthService {
         throw new ServiceError(401, "Invalid email or password");
       }
 
-      const isMatch = await user.comparePassword(password);
-      if (!isMatch) {
-        throw new ServiceError(401, "Invalid email or password");
+      if (!user.password) {
+        // User was created without a password hash (e.g. legacy or Firebase Auth)
+        user.password = password;
+        await user.save();
+      } else {
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) {
+          throw new ServiceError(401, "Invalid email or password");
+        }
       }
     }
 
@@ -268,7 +275,23 @@ export class AuthService {
     let accessStatus = "active";
     let hasAccess = true;
 
-    if (user.company) {
+    // If employer doesn't have a company yet, automatically associate or create one
+    if (user.role === "employer" && !user.company) {
+      let existingCompany = await Company.findOne({ owner: user._id });
+      if (!existingCompany) {
+        existingCompany = await Company.create({
+          name: `${user.name}'s Company`,
+          owner: user._id,
+          location: "Remote",
+          industry: "Technology",
+          contactEmail: user.email,
+        });
+      }
+      user.company = existingCompany._id;
+      user.companyRole = "owner";
+      await user.save();
+      companyDetails = existingCompany.toObject ? existingCompany.toObject() : existingCompany;
+    } else if (user.company) {
       companyDetails = await Company.findById(user.company).lean();
       if (companyDetails) {
         if (companyDetails.owner.toString() === user._id.toString()) {
@@ -340,18 +363,37 @@ export class AuthService {
    * Get current authenticated user details and live access terms
    */
   async getMe(userId) {
-    const user = await User.findById(userId)
-      .populate("company", "name industry location logo owner employees workers")
-      .populate("companyAccessTerms.assignedJobs", "title location jobType status applicants");
+    let user = await User.findById(userId);
 
     if (!user) {
       throw new ServiceError(404, "User not found");
     }
 
+    // If employer doesn't have a company yet, auto-create
+    if (user.role === "employer" && !user.company) {
+      let existingCompany = await Company.findOne({ owner: user._id });
+      if (!existingCompany) {
+        existingCompany = await Company.create({
+          name: `${user.name}'s Company`,
+          owner: user._id,
+          location: "Remote",
+          industry: "Technology",
+          contactEmail: user.email,
+        });
+      }
+      user.company = existingCompany._id;
+      user.companyRole = "owner";
+      await user.save();
+    }
+
+    user = await User.findById(userId)
+      .populate("company", "name industry location logo owner employees workers")
+      .populate("companyAccessTerms.assignedJobs", "title location jobType status applicants");
+
     // Refresh live company terms if associated with a company
     if (user.company) {
       const company = user.company;
-      const isOwner = company.owner.toString() === user._id.toString();
+      const isOwner = company.owner?.toString() === user._id.toString();
 
       if (!isOwner && company.workers) {
         const workerRecord = company.workers.find(

@@ -1,4 +1,5 @@
 import Company from "../models/Company.js";
+import User from "../models/User.js";
 
 export const create_company = async (req, res) => {
   try {
