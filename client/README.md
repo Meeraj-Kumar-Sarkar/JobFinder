@@ -164,12 +164,12 @@ On the Login screen, click either of the quick demo buttons to log in immediatel
 VITE_API_URL=http://localhost:5000/api
 
 # Firebase Web App Config (Optional for client-side Auth fallback)
-VITE_FIREBASE_API_KEY=AIzaSyAtrVHyMYO3dBitMmHS1dQT6KMnLBQQu1I
-VITE_FIREBASE_AUTH_DOMAIN=jobportal-55e77.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=jobportal-55e77
-VITE_FIREBASE_STORAGE_BUCKET=jobportal-55e77.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=296607390123
-VITE_FIREBASE_APP_ID=1:296607390123:web:6138e3f2bdb7e5f1251aee
+VITE_FIREBASE_API_KEY=your_firebase_api_key_here
+VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
 ```
 
 ---

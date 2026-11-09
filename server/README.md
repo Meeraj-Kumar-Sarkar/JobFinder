@@ -226,10 +226,10 @@ CLIENT_URL=http://localhost:5173
 MONGODB_URI=mongodb://localhost:27017/jobportal
 
 # Firebase Service Account Credentials (Optional for local fallback)
-FIREBASE_PROJECT_ID=jobportal-55e77
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@jobportal-55e77.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_STORAGE_BUCKET=jobportal-55e77.firebasestorage.app
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_CLIENT_EMAIL=your_service_account_email@your_project_id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour_private_key_here\n-----END PRIVATE KEY-----\n"
+FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 ```
 
 ---
