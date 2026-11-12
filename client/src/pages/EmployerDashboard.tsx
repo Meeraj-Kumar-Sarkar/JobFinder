@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   jobsApi,
   applicationsApi,
+  getSafeExternalUrl,
   type Job,
   type Application,
   type User,
@@ -536,9 +537,9 @@ function EmployerDashboard() {
                             </td>
 
                             <td className="py-4 space-y-1">
-                              {app.resumeURL ? (
+                              {getSafeExternalUrl(app.resumeURL) ? (
                                 <a
-                                  href={app.resumeURL}
+                                  href={getSafeExternalUrl(app.resumeURL)!}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"

@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import User from "../models/User.js";
 import Company from "../models/Company.js";
 import { ServiceError } from "./application.service.js";
+import { sanitizeUrl } from "../middleware/security.middleware.js";
 
 export class UserService {
   /**
@@ -40,7 +41,10 @@ export class UserService {
     const allowed = ["name", "phone", "profileImage", "headline", "bio"];
     for (const field of allowed) {
       if (updateData[field] !== undefined) {
-        user[field] = updateData[field];
+        user[field] =
+          field === "profileImage"
+            ? sanitizeUrl(updateData[field])
+            : String(updateData[field]).trim();
       }
     }
 
@@ -78,7 +82,7 @@ export class UserService {
     if (headline !== undefined) user.headline = headline?.trim();
     if (bio !== undefined) user.bio = bio?.trim();
     if (phone !== undefined) user.phone = phone?.trim();
-    if (profileImage !== undefined) user.profileImage = profileImage?.trim();
+    if (profileImage !== undefined) user.profileImage = sanitizeUrl(profileImage);
 
     if (skills !== undefined) {
       if (!Array.isArray(skills)) {
@@ -102,8 +106,8 @@ export class UserService {
       user.education = education;
     }
 
-    if (resumeURL !== undefined) user.resumeURL = resumeURL?.trim();
-    if (portfolioURL !== undefined) user.portfolioURL = portfolioURL?.trim();
+    if (resumeURL !== undefined) user.resumeURL = sanitizeUrl(resumeURL);
+    if (portfolioURL !== undefined) user.portfolioURL = sanitizeUrl(portfolioURL);
     if (expectedSalary !== undefined) user.expectedSalary = Number(expectedSalary);
     if (preferredJobType !== undefined) user.preferredJobType = preferredJobType?.trim();
 

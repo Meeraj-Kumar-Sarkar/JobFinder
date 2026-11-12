@@ -1,7 +1,30 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// Resolve API base URL: ensures that '/api' is present regardless of whether the user
+// provides 'https://example.com' or 'https://example.com/api' in VITE_API_URL
+const rawApiUrl = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").trim();
+const normalizedApiUrl = rawApiUrl.replace(/\/+$/, "");
+const API_BASE_URL = normalizedApiUrl.endsWith("/api")
+  ? normalizedApiUrl
+  : `${normalizedApiUrl}/api`;
+
+/**
+ * Validates external URLs on the client to prevent javascript: or data: URI XSS in href attributes
+ */
+export function getSafeExternalUrl(url?: string | null): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

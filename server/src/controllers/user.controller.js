@@ -40,6 +40,12 @@ export class UserController {
         return res.status(400).json({ success: false, message: "User ID is required" });
       }
 
+      if (req.user && req.user._id.toString() !== targetId) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Forbidden: You can only update your own profile" });
+      }
+
       const updated = await userService.updateUserProfile(targetId, req.body);
       return res.status(200).json(new ApiResponse(200, updated, "Profile updated successfully"));
     } catch (error) {
@@ -52,6 +58,12 @@ export class UserController {
       const targetId = (req.params.id || req.user?._id)?.toString();
       if (!targetId) {
         return res.status(400).json({ success: false, message: "User ID is required" });
+      }
+
+      if (req.user && req.user._id.toString() !== targetId) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Forbidden: You can only update your own profile" });
       }
 
       const updated = await userService.updateWorkerProfile(targetId, req.body);

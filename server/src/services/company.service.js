@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import Job from "../models/Job.js";
 import { ServiceError } from "./application.service.js";
 import { authService } from "./auth.service.js";
+import { sanitizeUrl } from "../middleware/security.middleware.js";
 
 export class CompanyService {
   /**
@@ -40,8 +41,8 @@ export class CompanyService {
     const company = await Company.create({
       name: name.trim(),
       description: description?.trim() || "",
-      website: website?.trim() || "",
-      logo: logo?.trim() || "",
+      website: sanitizeUrl(website),
+      logo: sanitizeUrl(logo),
       industry: industry?.trim() || "Technology",
       location: location?.trim() || "Remote",
       registrationNumber: registrationNumber?.trim() || "",

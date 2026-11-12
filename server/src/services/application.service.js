@@ -5,6 +5,7 @@ import Company from "../models/Company.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { APPLICATION_STATUSES } from "../utils/constants.js";
+import { sanitizeUrl } from "../middleware/security.middleware.js";
 
 export class ServiceError extends Error {
   constructor(statusCode, message) {
@@ -56,12 +57,13 @@ export class ApplicationService {
       throw new ServiceError(409, "You have already applied for this job");
     }
 
-    // Determine final resume URL
-    const finalResumeURL = resumeURL?.trim() || candidate.resumeURL?.trim();
+    // Determine final resume URL (only allow safe http/https URLs)
+    const rawResumeURL = resumeURL?.trim() || candidate.resumeURL?.trim();
+    const finalResumeURL = sanitizeUrl(rawResumeURL);
     if (!finalResumeURL) {
       throw new ServiceError(
         400,
-        "Resume URL is required. Please provide a resumeURL or update your candidate profile with a resume.",
+        "A valid HTTP/HTTPS Resume URL is required. Please provide a resumeURL or update your candidate profile with a resume.",
       );
     }
 

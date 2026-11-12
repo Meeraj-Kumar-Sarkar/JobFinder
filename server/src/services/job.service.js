@@ -3,6 +3,7 @@ import Job from "../models/Job.js";
 import Company from "../models/Company.js";
 import User from "../models/User.js";
 import { ServiceError } from "./application.service.js";
+import { escapeRegex } from "../middleware/security.middleware.js";
 
 export class JobService {
   /**
@@ -134,16 +135,16 @@ export class JobService {
       query.category = filter.category;
     }
 
-    if (filter.location && filter.location.trim()) {
-      query.location = { $regex: filter.location.trim(), $options: "i" };
+    if (filter.location && typeof filter.location === "string" && filter.location.trim()) {
+      query.location = { $regex: escapeRegex(filter.location.trim()), $options: "i" };
     }
 
     if (filter.jobType && filter.jobType !== "All") {
       query.jobType = filter.jobType;
     }
 
-    if (filter.search && filter.search.trim()) {
-      const term = filter.search.trim();
+    if (filter.search && typeof filter.search === "string" && filter.search.trim()) {
+      const term = escapeRegex(filter.search.trim());
       query.$or = [
         { title: { $regex: term, $options: "i" } },
         { description: { $regex: term, $options: "i" } },

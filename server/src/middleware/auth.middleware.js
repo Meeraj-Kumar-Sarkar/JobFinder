@@ -13,8 +13,12 @@ export const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      // Support x-user-id header for automated tests or legacy test harnesses
-      if (req.headers["x-user-id"] && isValidObjectId(req.headers["x-user-id"])) {
+      // Support x-user-id header ONLY outside production for automated local test harnesses
+      if (
+        process.env.NODE_ENV !== "production" &&
+        req.headers["x-user-id"] &&
+        isValidObjectId(req.headers["x-user-id"])
+      ) {
         const testUser = await User.findById(req.headers["x-user-id"]);
         if (testUser) {
           req.user = testUser;
@@ -90,7 +94,11 @@ export const optionalAuth = async (req, res, next) => {
           // Ignore token error for optional auth
         }
       }
-    } else if (req.headers["x-user-id"] && isValidObjectId(req.headers["x-user-id"])) {
+    } else if (
+      process.env.NODE_ENV !== "production" &&
+      req.headers["x-user-id"] &&
+      isValidObjectId(req.headers["x-user-id"])
+    ) {
       req.user = await User.findById(req.headers["x-user-id"]);
     }
     next();

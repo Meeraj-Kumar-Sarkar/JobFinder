@@ -4,6 +4,7 @@ import Company from "../models/Company.js";
 import { firebaseAuth, firestore } from "../config/firebase.js";
 import { generateToken } from "../utils/token.js";
 import { ServiceError } from "./application.service.js";
+import { sanitizeUrl } from "../middleware/security.middleware.js";
 
 export class AuthService {
   /**
@@ -107,21 +108,21 @@ export class AuthService {
 
     // Create User document in MongoDB
     const user = new User({
-      name: name.trim(),
+      name: String(name).trim(),
       email: normalizedEmail,
-      password, // hashed by pre-save hook
+      password: String(password), // hashed by pre-save hook
       role: normalizedRole,
       userType: determinedUserType,
-      phone: phone?.trim(),
-      profileImage: profileImage?.trim(),
+      phone: phone ? String(phone).trim() : undefined,
+      profileImage: sanitizeUrl(profileImage),
       // Normal Worker details
-      headline: headline?.trim(),
-      bio: bio?.trim(),
+      headline: headline ? String(headline).trim() : undefined,
+      bio: bio ? String(bio).trim() : undefined,
       skills: Array.isArray(skills) ? skills : [],
       experience: Number(experience) || 0,
       education: Array.isArray(education) ? education : [],
-      resumeURL: resumeURL?.trim(),
-      portfolioURL: portfolioURL?.trim(),
+      resumeURL: sanitizeUrl(resumeURL),
+      portfolioURL: sanitizeUrl(portfolioURL),
       expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
       preferredJobType: preferredJobType?.trim() || "Full Time",
     });
@@ -180,8 +181,8 @@ export class AuthService {
         description: companyDescription?.trim() || "",
         industry: companyIndustry?.trim() || "Technology",
         location: companyLocation?.trim() || "Remote",
-        website: companyWebsite?.trim() || "",
-        logo: companyLogo?.trim() || "",
+        website: sanitizeUrl(companyWebsite),
+        logo: sanitizeUrl(companyLogo),
         registrationNumber: registrationNumber?.trim() || "",
         contactEmail: normalizedEmail,
         contactPhone: phone?.trim() || "",
@@ -245,24 +246,18 @@ export class AuthService {
       }
     } else {
       // 2. Email & Password Login
-      if (!email || !password) {
+      if (!email || !password || typeof email !== "string" || typeof password !== "string") {
         throw new ServiceError(400, "Email and password are required");
       }
 
       user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
-      if (!user) {
+      if (!user || !user.password) {
         throw new ServiceError(401, "Invalid email or password");
       }
 
-      if (!user.password) {
-        // User was created without a password hash (e.g. legacy or Firebase Auth)
-        user.password = password;
-        await user.save();
-      } else {
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-          throw new ServiceError(401, "Invalid email or password");
-        }
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        throw new ServiceError(401, "Invalid email or password");
       }
     }
 

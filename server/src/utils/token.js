@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import { env } from "../config/env.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || env.FIREBASE_PRIVATE_KEY || "jobportal_jwt_secret_token_key_382910";
+const getJwtSecret = () => {
+  return (
+    process.env.JWT_SECRET ||
+    env.JWT_SECRET ||
+    env.FIREBASE_PRIVATE_KEY ||
+    "jobportal_jwt_secret_token_key_382910"
+  );
+};
 
 function base64UrlEncode(str) {
   return Buffer.from(str)
@@ -12,11 +19,11 @@ function base64UrlEncode(str) {
 }
 
 function base64UrlDecode(str) {
-  str = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) {
-    str += "=";
+  let padded = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (padded.length % 4) {
+    padded += "=";
   }
-  return Buffer.from(str, "base64").toString("utf8");
+  return Buffer.from(padded, "base64").toString("utf8");
 }
 
 export function generateToken(payload, expiresInSeconds = 7 * 24 * 3600) {
@@ -32,7 +39,7 @@ export function generateToken(payload, expiresInSeconds = 7 * 24 * 3600) {
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
 
   const signature = crypto
-    .createHmac("sha256", JWT_SECRET)
+    .createHmac("sha256", getJwtSecret())
     .update(`${encodedHeader}.${encodedPayload}`)
     .digest("base64")
     .replace(/=/g, "")
@@ -44,19 +51,34 @@ export function generateToken(payload, expiresInSeconds = 7 * 24 * 3600) {
 
 export function verifyCustomToken(token) {
   try {
+    if (!token || typeof token !== "string") return null;
     const parts = token.split(".");
     if (parts.length !== 3) return null;
 
     const [encodedHeader, encodedPayload, signature] = parts;
+
+    // 1. Validate JWT header to prevent algorithm confusion (e.g. alg: "none")
+    const header = JSON.parse(base64UrlDecode(encodedHeader));
+    if (!header || header.alg !== "HS256" || header.typ !== "JWT") {
+      return null;
+    }
+
+    // 2. Compute expected HMAC-SHA256 signature
     const expectedSignature = crypto
-      .createHmac("sha256", JWT_SECRET)
+      .createHmac("sha256", getJwtSecret())
       .update(`${encodedHeader}.${encodedPayload}`)
       .digest("base64")
       .replace(/=/g, "")
       .replace(/\+/g, "-")
       .replace(/\//g, "_");
 
-    if (signature !== expectedSignature) {
+    // 3. Constant-time comparison to prevent timing side-channel attacks
+    const sigBuffer = Buffer.from(signature, "utf8");
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+    if (
+      sigBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+    ) {
       return null;
     }
 

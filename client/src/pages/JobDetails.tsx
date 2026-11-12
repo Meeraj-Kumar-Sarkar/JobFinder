@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import { jobsApi, applicationsApi, type Job } from "../services/api";
+import { jobsApi, applicationsApi, getSafeExternalUrl, type Job } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 function JobDetails() {
@@ -299,9 +299,9 @@ function JobDetails() {
                     </p>
                   )}
 
-                  {company.website && (
+                  {getSafeExternalUrl(company.website) && (
                     <a
-                      href={company.website}
+                      href={getSafeExternalUrl(company.website)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-4 inline-block text-xs font-semibold text-blue-600 hover:underline"
