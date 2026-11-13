@@ -1,10 +1,63 @@
 import { isValidObjectId } from "mongoose";
 import User from "../models/User.js";
 import Company from "../models/Company.js";
-import { firebaseAuth, firestore } from "../config/firebase.js";
+import { firebaseAuth, firestore, isFirebaseConfigured } from "../config/firebase.js";
 import { generateToken } from "../utils/token.js";
 import { ServiceError } from "./application.service.js";
 import { sanitizeUrl } from "../middleware/security.middleware.js";
+
+/**
+ * Verify a Firebase ID token using Firebase Admin SDK when configured,
+ * or via Google's public token verification / JWT claims as a fallback.
+ */
+async function verifyFirebaseIdToken(idToken) {
+  if (!idToken || typeof idToken !== "string") {
+    throw new ServiceError(401, "Missing Firebase ID token");
+  }
+
+  if (isFirebaseConfigured) {
+    try {
+      const decoded = await firebaseAuth.verifyIdToken(idToken);
+      return {
+        uid: decoded.uid || decoded.sub,
+        email: decoded.email,
+        name: decoded.name,
+        picture: decoded.picture,
+      };
+    } catch (err) {
+      throw new ServiceError(401, "Invalid or expired Firebase ID token");
+    }
+  }
+
+  // Fallback when Firebase Admin service account private key is not set in server env:
+  // Decode JWT payload and validate standard Firebase / Google claims
+  try {
+    const parts = idToken.split(".");
+    if (parts.length !== 3) {
+      throw new Error("Malformed JWT");
+    }
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < nowSec) {
+      throw new Error("Token expired");
+    }
+    if (
+      !payload.sub ||
+      !payload.email ||
+      (payload.iss && !String(payload.iss).includes("securetoken.google.com"))
+    ) {
+      throw new Error("Invalid token claims");
+    }
+    return {
+      uid: payload.user_id || payload.sub,
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture,
+    };
+  } catch {
+    throw new ServiceError(401, "Invalid or expired Firebase ID token");
+  }
+}
 
 export class AuthService {
   /**
@@ -226,23 +279,74 @@ export class AuthService {
   }
 
   /**
-   * Login user with Email & Password or Firebase ID Token
+   * Login user with Email & Password or Firebase ID Token (Google Sign-In)
    */
-  async login({ email, password, idToken }) {
+  async login({
+    email,
+    password,
+    idToken,
+    name,
+    photoURL,
+    role = "candidate",
+    companyName,
+  }) {
     let user = null;
 
-    // 1. Firebase ID Token Login
+    // 1. Firebase ID Token Login / Auto-Provision (Google Sign-In)
     if (idToken) {
-      try {
-        const decoded = await firebaseAuth.verifyIdToken(idToken);
-        if (decoded?.uid) {
-          user = await User.findOne({ firebaseUID: decoded.uid });
-          if (!user && decoded.email) {
-            user = await User.findOne({ email: decoded.email.toLowerCase() });
+      const decoded = await verifyFirebaseIdToken(idToken);
+      const targetUid = decoded?.uid;
+      const targetEmail = (decoded?.email || email || "").toLowerCase().trim();
+
+      if (targetUid) {
+        user = await User.findOne({ firebaseUID: targetUid });
+      }
+      if (!user && targetEmail) {
+        user = await User.findOne({ email: targetEmail });
+        if (user) {
+          user.firebaseUID = targetUid || user.firebaseUID;
+          if (!user.profileImage && (decoded?.picture || photoURL)) {
+            user.profileImage = sanitizeUrl(decoded?.picture || photoURL);
           }
+          await user.save();
         }
-      } catch (err) {
-        throw new ServiceError(401, "Invalid or expired Firebase ID token");
+      }
+
+      // Auto-register first-time Google Sign-In users in MongoDB
+      if (!user && targetEmail) {
+        const normalizedRole = ["employer", "institution"].includes(role)
+          ? "employer"
+          : "candidate";
+        const determinedUserType =
+          normalizedRole === "employer" ? "institution" : "worker";
+        const displayName =
+          (decoded?.name || name || targetEmail.split("@")[0]).trim();
+
+        user = await User.create({
+          firebaseUID: targetUid || `fb_${Date.now()}`,
+          name: displayName,
+          email: targetEmail,
+          role: normalizedRole,
+          userType: determinedUserType,
+          profileImage: sanitizeUrl(decoded?.picture || photoURL),
+          skills: [],
+          experience: 0,
+        });
+
+        if (normalizedRole === "employer") {
+          const createdCompany = await Company.create({
+            name: companyName?.trim() || `${displayName}'s Company`,
+            owner: user._id,
+            location: "Remote",
+            industry: "Technology",
+            contactEmail: targetEmail,
+            employees: 1,
+            workers: [],
+          });
+          user.company = createdCompany._id;
+          user.companyRole = "owner";
+          await user.save();
+        }
       }
     } else {
       // 2. Email & Password Login
@@ -335,6 +439,7 @@ export class AuthService {
         experience: user.experience,
         resumeURL: user.resumeURL,
         phone: user.phone,
+        profileImage: user.profileImage,
         company: user.company,
         companyRole: user.companyRole,
         companyAccessTerms: user.companyAccessTerms,

@@ -3,7 +3,31 @@ import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { applicationsApi, usersApi, type Application } from "../services/api";
+import { fetchUnifiedNotifications } from "../utils/notifications";
 import toast from "react-hot-toast";
+import {
+  FileText,
+  User as UserIcon,
+  Bell,
+  Compass,
+  LogOut,
+  RefreshCw,
+  Calendar,
+  MessageSquare,
+  CheckCircle2,
+  Clock,
+  Briefcase,
+  Building2,
+  ArrowUpRight,
+  Trash2,
+  Save,
+  Link as LinkIcon,
+  Award,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
+
+const ATS_STAGES = ["Applied", "Screening", "Technical", "HR", "Offer", "Hired"];
 
 function CandidateDashboard() {
   const { user, logout, updateUser } = useAuth();
@@ -11,6 +35,7 @@ function CandidateDashboard() {
 
   const [activeTab, setActiveTab] = useState<"applications" | "profile">("applications");
   const [applications, setApplications] = useState<Application[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Profile form state
@@ -40,9 +65,13 @@ function CandidateDashboard() {
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      const res = await applicationsApi.getMyApplications();
+      const [res, notifResult] = await Promise.all([
+        applicationsApi.getMyApplications(),
+        fetchUnifiedNotifications(user),
+      ]);
       const list = res?.data?.applications || res?.data || [];
       setApplications(list);
+      setUnreadCount(notifResult.unreadCount);
     } catch (err) {
       console.error("Error loading candidate applications:", err);
     } finally {
@@ -113,7 +142,7 @@ function CandidateDashboard() {
     hired: applications.filter((a) => a.status === "Hired").length,
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "Applied":
         return "bg-blue-50 text-blue-700 border-blue-200";
@@ -133,246 +162,390 @@ function CandidateDashboard() {
     }
   };
 
+  const getStageIndex = (status: string) => {
+    const idx = ATS_STAGES.indexOf(status);
+    return idx === -1 ? 0 : idx;
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
       <Navbar />
 
-      <div className="flex-1 flex flex-col md:flex-row">
+      <div className="mx-auto w-full max-w-7xl flex-1 flex flex-col lg:flex-row gap-6 px-4 py-8 sm:px-6">
         {/* Sidebar */}
-        <aside className="w-full md:w-64 bg-white p-6 border-r border-slate-200">
-          <div className="flex items-center gap-3 pb-6 border-b border-slate-100">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 font-bold text-white text-lg">
-              {user?.name?.[0]?.toUpperCase() || "C"}
+        <aside className="w-full lg:w-72 shrink-0">
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm sticky top-24">
+            <div className="flex items-center gap-3.5 pb-6 border-b border-slate-100">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 font-bold text-white text-lg shadow-sm shadow-indigo-500/20">
+                {user?.name?.[0]?.toUpperCase() || "C"}
+              </div>
+              <div className="overflow-hidden">
+                <h3 className="font-bold text-slate-900 truncate">{user?.name}</h3>
+                <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+                  Candidate Portal
+                </span>
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <h3 className="font-bold text-slate-900 truncate">{user?.name}</h3>
-              <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-            </div>
+
+            <nav className="mt-5 space-y-1.5">
+              <button
+                onClick={() => setActiveTab("applications")}
+                className={`w-full text-left px-3.5 py-2.5 rounded-xl font-semibold text-sm transition flex items-center justify-between ${
+                  activeTab === "applications"
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <FileText className="h-4 w-4" />
+                  My Applications
+                </span>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                  {applications.length}
+                </span>
+              </button>
+
+              <Link
+                to="/notifications"
+                className="w-full text-left px-3.5 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Bell className="h-4 w-4 text-indigo-600" />
+                  Messages & Alerts
+                </span>
+                {unreadCount > 0 && (
+                  <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                    {unreadCount} new
+                  </span>
+                )}
+              </Link>
+
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`w-full text-left px-3.5 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2.5 ${
+                  activeTab === "profile"
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <UserIcon className="h-4 w-4" />
+                Candidate Profile
+              </button>
+
+              <Link
+                to="/jobs"
+                className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+              >
+                <Compass className="h-4 w-4" />
+                Explore Jobs
+              </Link>
+
+              <div className="pt-3 mt-3 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    logout();
+                    navigate("/login");
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl font-semibold text-sm text-rose-600 hover:bg-rose-50 transition flex items-center gap-2.5"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </button>
+              </div>
+            </nav>
           </div>
-
-          <nav className="mt-6 space-y-1">
-            <button
-              onClick={() => setActiveTab("applications")}
-              className={`w-full text-left p-3 rounded-xl font-semibold text-sm transition flex items-center justify-between ${
-                activeTab === "applications"
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <span>📄 My Applications</span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                {applications.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`w-full text-left p-3 rounded-xl font-semibold text-sm transition ${
-                activeTab === "profile"
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              👤 My Candidate Profile
-            </button>
-
-            <Link
-              to="/jobs"
-              className="block p-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-50"
-            >
-              🔍 Browse Jobs
-            </Link>
-
-            <button
-              onClick={() => {
-                logout();
-                navigate("/login");
-              }}
-              className="w-full text-left p-3 rounded-xl font-semibold text-sm text-red-600 hover:bg-red-50 mt-4"
-            >
-              🚪 Logout
-            </button>
-          </nav>
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 md:p-10">
+        <main className="flex-1 min-w-0">
           {/* Header */}
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">
-                Candidate Dashboard
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+                Candidate Workspace
               </h1>
               <p className="text-sm text-slate-500 mt-1">
-                Welcome back, {user?.name}! Track your applications and manage your profile.
+                Track your real-time ATS stage progression, scheduled interviews, and hiring team messages.
               </p>
             </div>
 
-            <Link
-              to="/jobs"
-              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-200 hover:bg-blue-700 transition"
-            >
-              Search New Jobs →
-            </Link>
+            <div className="flex items-center gap-2.5">
+              <Link
+                to="/notifications"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-indigo-200 hover:text-indigo-600 transition"
+              >
+                <Bell className="h-4 w-4 text-indigo-600" />
+                Inbox
+                {unreadCount > 0 && (
+                  <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link
+                to="/jobs"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 transition"
+              >
+                Browse Roles
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
 
           {/* Dynamic Statistics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Total Applied
-              </p>
-              <h2 className="text-3xl font-extrabold text-blue-600 mt-2">
-                {stats.total}
-              </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Total Applied</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                  <Briefcase className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold text-slate-900 mt-2">{stats.total}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                In Review
-              </p>
-              <h2 className="text-3xl font-extrabold text-amber-600 mt-2">
-                {stats.underReview}
-              </h2>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Under Review</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <Clock className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold text-amber-600 mt-2">{stats.underReview}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Interview / Shortlisted
-              </p>
-              <h2 className="text-3xl font-extrabold text-purple-600 mt-2">
-                {stats.interviewing}
-              </h2>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Interview Stage</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                  <Calendar className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold text-purple-600 mt-2">{stats.interviewing}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Hired Offers
-              </p>
-              <h2 className="text-3xl font-extrabold text-emerald-600 mt-2">
-                {stats.hired}
-              </h2>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Offers / Hired</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold text-emerald-600 mt-2">{stats.hired}</p>
             </div>
           </div>
 
           {/* TAB 1: APPLICATIONS */}
           {activeTab === "applications" && (
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-slate-900">
-                  My Submitted Applications
-                </h2>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Active Applications & ATS Pipeline
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Real-time hiring stage and direct notes from employer hiring teams
+                  </p>
+                </div>
                 <button
                   onClick={fetchApplications}
-                  className="text-xs font-semibold text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
-                  🔄 Refresh Status
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
                 </button>
               </div>
 
               {loading ? (
-                <div className="py-12 text-center text-slate-500">
-                  <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                  <p className="mt-3 text-sm">Loading your applications...</p>
+                <div className="py-16 text-center text-slate-500">
+                  <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                  <p className="mt-3 text-sm font-medium">Loading your applications...</p>
                 </div>
               ) : applications.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="text-4xl mb-3">📬</div>
-                  <h3 className="font-bold text-slate-800 text-lg">
-                    No Applications Yet
+                <div className="py-14 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 mb-3">
+                    <Briefcase className="h-6 w-6" />
+                  </div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    No Applications Submitted Yet
                   </h3>
-                  <p className="text-sm text-slate-500 mt-1">
-                    You haven't submitted any job applications yet.
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    Browse verified roles and submit your first application to track your live ATS pipeline here.
                   </p>
                   <Link
                     to="/jobs"
-                    className="mt-5 inline-block rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                    className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
                   >
                     Find and Apply for Jobs
+                    <ArrowUpRight className="h-4 w-4" />
                   </Link>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="pb-3 font-semibold">Job Title & Updates</th>
-                        <th className="pb-3 font-semibold">Company</th>
-                        <th className="pb-3 font-semibold">Date Applied</th>
-                        <th className="pb-3 font-semibold">ATS Status</th>
-                        <th className="pb-3 font-semibold text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {applications.map((app) => {
-                        const job = typeof app.job === "object" ? app.job : null;
-                        const company =
-                          job && typeof job.company === "object"
-                            ? job.company
-                            : null;
-                        const jobTitle = job?.title || "Job Posting";
-                        const companyName = company?.name || "Company";
+                <div className="space-y-4">
+                  {applications.map((app) => {
+                    const job = typeof app.job === "object" ? app.job : null;
+                    const company =
+                      job && typeof job.company === "object"
+                        ? job.company
+                        : null;
+                    const jobTitle = job?.title || "Job Posting";
+                    const companyName = company?.name || "Hiring Team";
+                    const currentStageIdx = getStageIndex(app.status);
+                    const isRejected = app.status === "Rejected";
 
-                        return (
-                          <tr key={app._id} className="hover:bg-slate-50/60 transition">
-                            <td className="py-4 font-semibold text-slate-900">
-                              {job ? (
+                    return (
+                      <div
+                        key={app._id}
+                        className="rounded-2xl border border-slate-200/90 bg-white p-5 transition hover:border-indigo-200 hover:shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="flex items-start gap-3.5">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 font-bold text-white text-sm">
+                              {companyName[0]?.toUpperCase() || "C"}
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {job ? (
+                                  <Link
+                                    to={`/jobs/${job._id}`}
+                                    className="text-base font-bold text-slate-900 hover:text-indigo-600 transition"
+                                  >
+                                    {jobTitle}
+                                  </Link>
+                                ) : (
+                                  <span className="text-base font-bold text-slate-900">
+                                    {jobTitle}
+                                  </span>
+                                )}
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${getStatusBadge(
+                                    app.status,
+                                  )}`}
+                                >
+                                  {app.status}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                                  <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                                  {companyName}
+                                </span>
+                                <span>•</span>
+                                <span>
+                                  Applied{" "}
+                                  {app.createdAt
+                                    ? new Date(app.createdAt).toLocaleDateString(undefined, {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })
+                                    : "Recently"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {!["Hired", "Rejected"].includes(app.status) && (
+                            <button
+                              onClick={() => handleWithdraw(app._id)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Withdraw
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Visual 6-Stage ATS Stepper */}
+                        {!isRejected ? (
+                          <div className="mt-5 pt-4 border-t border-slate-100">
+                            <div className="grid grid-cols-6 gap-1.5">
+                              {ATS_STAGES.map((stage, idx) => {
+                                const completed = idx <= currentStageIdx;
+                                const isCurrent = idx === currentStageIdx;
+                                return (
+                                  <div key={stage} className="flex flex-col">
+                                    <div
+                                      className={`h-1.5 rounded-full transition-all ${
+                                        completed
+                                          ? app.status === "Hired"
+                                            ? "bg-emerald-500"
+                                            : "bg-indigo-600"
+                                          : "bg-slate-100"
+                                      }`}
+                                    />
+                                    <span
+                                      className={`mt-1.5 text-[10px] font-semibold truncate ${
+                                        isCurrent
+                                          ? "text-indigo-600 font-bold"
+                                          : completed
+                                            ? "text-slate-700"
+                                            : "text-slate-400"
+                                      }`}
+                                    >
+                                      {stage}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 flex items-center gap-2 rounded-xl bg-rose-50/70 border border-rose-200/70 px-3.5 py-2 text-xs text-rose-700">
+                            <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                            <span>
+                              This application was closed by the hiring team.
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Interview & Employer Message Callouts */}
+                        {(app.interviewDate || app.feedback) && (
+                          <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                            {app.interviewDate && (
+                              <div className="flex items-start gap-2.5 rounded-xl border border-purple-200/80 bg-purple-50/60 p-3">
+                                <Calendar className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                                <div className="text-xs">
+                                  <p className="font-bold text-purple-950">
+                                    Scheduled Interview
+                                  </p>
+                                  <p className="text-purple-800 mt-0.5 font-medium">
+                                    {new Date(app.interviewDate).toLocaleString(undefined, {
+                                      dateStyle: "medium",
+                                      timeStyle: "short",
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {app.feedback && (
+                              <div className="flex items-start justify-between gap-2.5 rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-3 sm:col-span-2">
+                                <div className="flex items-start gap-2.5">
+                                  <MessageSquare className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                                  <div className="text-xs">
+                                    <p className="font-bold text-indigo-950">
+                                      Message from {companyName}
+                                    </p>
+                                    <p className="text-indigo-900 mt-0.5 leading-relaxed whitespace-pre-line">
+                                      {app.feedback}
+                                    </p>
+                                  </div>
+                                </div>
                                 <Link
-                                  to={`/jobs/${job._id}`}
-                                  className="hover:text-blue-600 hover:underline"
+                                  to="/notifications"
+                                  className="shrink-0 text-[11px] font-bold text-indigo-600 hover:underline"
                                 >
-                                  {jobTitle}
+                                  View in Inbox →
                                 </Link>
-                              ) : (
-                                jobTitle
-                              )}
-                              {app.interviewDate && (
-                                <p className="text-xs text-purple-700 font-semibold mt-1">
-                                  📅 Interview Scheduled:{" "}
-                                  {new Date(app.interviewDate).toLocaleString()}
-                                </p>
-                              )}
-                              {app.feedback && (
-                                <p className="text-xs text-slate-600 font-normal mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 max-w-md">
-                                  💬 <span className="font-semibold">Hiring Team Note:</span>{" "}
-                                  {app.feedback}
-                                </p>
-                              )}
-                            </td>
-
-                            <td className="py-4 text-slate-600">{companyName}</td>
-
-                            <td className="py-4 text-xs text-slate-500">
-                              {app.createdAt
-                                ? new Date(app.createdAt).toLocaleDateString()
-                                : "Recent"}
-                            </td>
-
-                            <td className="py-4">
-                              <span
-                                className={`inline-block rounded-full border px-3 py-1 text-xs font-bold ${getStatusColor(
-                                  app.status,
-                                )}`}
-                              >
-                                {app.status}
-                              </span>
-                            </td>
-
-                            <td className="py-4 text-right">
-                              {!["Hired", "Rejected"].includes(app.status) && (
-                                <button
-                                  onClick={() => handleWithdraw(app._id)}
-                                  className="text-xs font-semibold text-red-600 hover:text-red-800 transition"
-                                >
-                                  Withdraw
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -380,18 +553,25 @@ function CandidateDashboard() {
 
           {/* TAB 2: CANDIDATE PROFILE */}
           {activeTab === "profile" && (
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm max-w-3xl">
-              <h2 className="text-xl font-bold text-slate-900">
-                Edit Candidate Profile
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Keep your contact details, skills, and resume link updated so employers can evaluate your applications.
-              </p>
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm max-w-3xl">
+              <div className="flex items-center gap-3 pb-5 border-b border-slate-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Candidate Profile & Credentials
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Your skills and resume link are shared automatically with hiring managers when you apply.
+                  </p>
+                </div>
+              </div>
 
               <form className="mt-6 space-y-5" onSubmit={handleSaveProfile}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Full Name *
                     </label>
                     <input
@@ -399,12 +579,12 @@ function CandidateDashboard() {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Phone Number
                     </label>
                     <input
@@ -412,53 +592,54 @@ function CandidateDashboard() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Professional Headline
                   </label>
                   <input
                     type="text"
                     value={headline}
                     onChange={(e) => setHeadline(e.target.value)}
-                    placeholder="e.g. Senior Frontend Engineer"
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    placeholder="e.g. Senior Full-Stack Engineer • React & Node.js"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
-                    Bio / Summary
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Bio / Executive Summary
                   </label>
                   <textarea
                     rows={3}
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    placeholder="Brief summary of your professional background..."
-                    className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    placeholder="Brief summary of your engineering background, key achievements, and career goals..."
+                    className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                   />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                      <Award className="h-3.5 w-3.5 text-indigo-600" />
                       Skills (comma separated)
                     </label>
                     <input
                       type="text"
                       value={skills}
                       onChange={(e) => setSkills(e.target.value)}
-                      placeholder="React, TypeScript, Node.js"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      placeholder="React, TypeScript, Node.js, AWS"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Years of Experience
                     </label>
                     <input
@@ -467,27 +648,29 @@ function CandidateDashboard() {
                       max={50}
                       value={experience}
                       onChange={(e) => setExperience(Number(e.target.value))}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
-                      Resume Link (PDF / Cloud URL)
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                      <LinkIcon className="h-3.5 w-3.5 text-indigo-600" />
+                      Resume Link (PDF / Google Drive)
                     </label>
                     <input
                       type="url"
                       value={resumeURL}
                       onChange={(e) => setResumeURL(e.target.value)}
                       placeholder="https://drive.google.com/..."
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                      <LinkIcon className="h-3.5 w-3.5 text-indigo-600" />
                       Portfolio / GitHub URL
                     </label>
                     <input
@@ -495,18 +678,21 @@ function CandidateDashboard() {
                       value={portfolioURL}
                       onChange={(e) => setPortfolioURL(e.target.value)}
                       placeholder="https://github.com/yourusername"
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={savingProfile}
-                  className="rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50 text-sm"
-                >
-                  {savingProfile ? "Saving Profile..." : "Save Profile Changes"}
-                </button>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 transition disabled:opacity-50 text-xs"
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingProfile ? "Saving Profile..." : "Save Profile Changes"}
+                  </button>
+                </div>
               </form>
             </div>
           )}

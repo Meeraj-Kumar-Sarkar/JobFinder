@@ -140,6 +140,10 @@ export class ApplicationService {
       try {
         await Notification.create({
           user: job.createdBy,
+          sender: candidate._id,
+          job: job._id,
+          application: newApplication._id,
+          type: "application_received",
           title: "New Job Application",
           message: `${candidate.name} applied for "${job.title}".`,
           isRead: false,
@@ -441,11 +445,20 @@ export class ApplicationService {
 
     // Notify candidate
     try {
-      const job = await Job.findById(application.job).select("title");
+      const job = await Job.findById(application.job)
+        .populate("company", "name")
+        .select("title company");
+      const companyName = job?.company?.name || "";
+      const feedbackNote =
+        feedback && feedback.trim() ? ` Note from hiring team: "${feedback.trim()}"` : "";
       await Notification.create({
         user: application.candidate,
-        title: "Application Status Update",
-        message: `Your application for "${job?.title || "the job"}" status has been updated to "${nextStatus}".`,
+        job: application.job,
+        application: application._id,
+        companyName: companyName || undefined,
+        type: "status_update",
+        title: `Application Status Updated: ${nextStatus}`,
+        message: `Your application for "${job?.title || "the job"}"${companyName ? ` at ${companyName}` : ""} has moved to the "${nextStatus}" stage.${feedbackNote}`,
         isRead: false,
       });
     } catch (err) {
@@ -489,11 +502,22 @@ export class ApplicationService {
 
     // Notify candidate
     try {
-      const job = await Job.findById(application.job).select("title");
+      const job = await Job.findById(application.job)
+        .populate("company", "name")
+        .select("title company");
+      const companyName = job?.company?.name || "";
+      const noteText =
+        feedback && feedback.trim()
+          ? ` Details / Meeting Link: ${feedback.trim()}`
+          : "";
       await Notification.create({
         user: application.candidate,
-        title: "Interview Scheduled",
-        message: `An interview has been scheduled for "${job?.title || "your application"}" on ${parsedDate.toLocaleString()}.`,
+        job: application.job,
+        application: application._id,
+        companyName: companyName || undefined,
+        type: "interview",
+        title: `Interview Scheduled — ${job?.title || "Application"}`,
+        message: `An interview has been scheduled for "${job?.title || "your application"}"${companyName ? ` at ${companyName}` : ""} on ${parsedDate.toLocaleString()}.${noteText}`,
         isRead: false,
       });
     } catch (err) {
@@ -549,13 +573,23 @@ export class ApplicationService {
 
     // Send notification to candidate
     try {
+      const populatedJob = await Job.findById(application.job)
+        .populate("company", "name")
+        .select("title company");
+      const companyName = populatedJob?.company?.name || "";
+      const feedbackNote =
+        feedback && feedback.trim() ? ` Feedback: "${feedback.trim()}"` : "";
       await Notification.create({
         user: candidate._id,
-        title: `Application Decision: ${normalizedDecision}`,
+        job: job._id,
+        application: application._id,
+        companyName: companyName || undefined,
+        type: "decision",
+        title: `Application Decision: ${normalizedDecision} — ${job.title}`,
         message:
           normalizedDecision === "Hired"
-            ? `Congratulations! You have been hired for the position of "${job.title}".`
-            : `Thank you for your interest. Unfortunately, your application for "${job.title}" was not selected.`,
+            ? `Congratulations! You have been selected and hired for "${job.title}"${companyName ? ` at ${companyName}` : ""}.${feedbackNote}`
+            : `Thank you for your interest in "${job.title}"${companyName ? ` at ${companyName}` : ""}. Unfortunately, your application was not selected for this role.${feedbackNote}`,
         isRead: false,
       });
     } catch (err) {

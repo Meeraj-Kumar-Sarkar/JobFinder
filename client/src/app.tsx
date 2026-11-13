@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import CandidateDashboard from "./pages/CandidateDashboard";
 import EmployerDashboard from "./pages/EmployerDashboard";
+import Notifications from "./pages/Notifications";
 
 function App() {
   return (
@@ -20,10 +21,12 @@ function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            borderRadius: "12px",
-            background: "#1e293b",
+            borderRadius: "14px",
+            background: "#0f172a",
             color: "#fff",
-            fontSize: "14px",
+            fontSize: "13px",
+            fontWeight: 500,
+            padding: "12px 16px",
           },
         }}
       />
@@ -39,6 +42,16 @@ function App() {
           <Route path="/apply/:id" element={<Apply />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+
+          {/* Protected Notifications & Messages Center */}
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected Candidate Dashboard */}
           <Route

@@ -197,11 +197,41 @@ export interface Application {
     | "Hired"
     | "Rejected";
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface NotificationItem {
+  _id: string;
+  user: string;
+  sender?: { _id: string; name: string; email?: string; role?: string } | string;
+  job?: Job | string;
+  application?: Application | string;
+  companyName?: string;
+  type?:
+    | "status_update"
+    | "interview"
+    | "decision"
+    | "employer_message"
+    | "application_received"
+    | "general";
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  synthetic?: boolean;
 }
 
 // Auth API
 export const authApi = {
-  login: async (credentials: { email?: string; password?: string; idToken?: string }) => {
+  login: async (credentials: {
+    email?: string;
+    password?: string;
+    idToken?: string;
+    name?: string;
+    photoURL?: string;
+    role?: "candidate" | "employer";
+    companyName?: string;
+  }) => {
     const res = await api.post("/auth/login", credentials);
     return res.data;
   },
@@ -349,6 +379,41 @@ export const usersApi = {
 export const companiesApi = {
   getById: async (id: string) => {
     const res = await api.get(`/companies/${id}`);
+    return res.data;
+  },
+};
+
+// Notifications & Messages API
+export const notificationsApi = {
+  getAll: async (params?: { limit?: number }) => {
+    const res = await api.get("/notifications", { params });
+    return res.data;
+  },
+
+  sendMessage: async (data: {
+    recipientId?: string;
+    applicationId?: string;
+    jobId?: string;
+    title?: string;
+    message: string;
+    type?: string;
+  }) => {
+    const res = await api.post("/notifications/send", data);
+    return res.data;
+  },
+
+  markAsRead: async (id: string) => {
+    const res = await api.patch(`/notifications/${id}/read`);
+    return res.data;
+  },
+
+  markAllAsRead: async () => {
+    const res = await api.patch("/notifications/read-all");
+    return res.data;
+  },
+
+  remove: async (id: string) => {
+    const res = await api.delete(`/notifications/${id}`);
     return res.data;
   },
 };

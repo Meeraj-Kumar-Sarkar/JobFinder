@@ -4,6 +4,19 @@ import Navbar from "../components/Navbar";
 import { jobsApi, applicationsApi, type Job } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Building2,
+  MapPin,
+  Briefcase,
+  Lock,
+  AlertCircle,
+  Link as LinkIcon,
+  Award,
+  Send,
+} from "lucide-react";
 
 function Apply() {
   const { id } = useParams<{ id: string }>();
@@ -153,16 +166,16 @@ function Apply() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
         <Navbar />
         <div className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-10 text-center shadow-xl border border-slate-200">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl text-emerald-600">
-              ✓
+          <div className="w-full max-w-lg rounded-3xl bg-white p-10 text-center shadow-xl border border-slate-200/80">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+              <CheckCircle2 className="h-8 w-8" />
             </div>
 
-            <h1 className="mt-6 text-3xl font-extrabold text-slate-900">
-              Application Submitted!
+            <h1 className="mt-6 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              Application Delivered!
             </h1>
 
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
@@ -170,24 +183,23 @@ function Apply() {
               <strong className="text-slate-900">
                 {job?.title || "this position"}
               </strong>{" "}
-              at <strong className="text-slate-900">{companyName}</strong> has been
-              delivered to the hiring team. You can track real-time stage updates
-              and interview invitations from your dashboard.
+              at <strong className="text-slate-900">{companyName}</strong> is now in the ATS pipeline. Track stage updates and hiring team messages in your workspace.
             </p>
 
             <div className="mt-8 flex flex-col gap-3">
               <Link
                 to="/dashboard"
-                className="w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-700"
               >
-                Track Application in Dashboard →
+                Track in Candidate Workspace
+                <ArrowRight className="h-4 w-4" />
               </Link>
 
               <Link
-                to="/jobs"
-                className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                to="/notifications"
+                className="w-full rounded-xl border border-slate-200 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
               >
-                Explore More Job Openings
+                View Notifications & Messages
               </Link>
             </div>
           </div>
@@ -197,99 +209,111 @@ function Apply() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
       <Navbar />
 
-      <main className="flex-1 mx-auto max-w-3xl w-full px-6 py-10">
+      <main className="flex-1 mx-auto max-w-3xl w-full px-4 sm:px-6 py-8">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm font-semibold text-blue-600 hover:underline mb-6 flex items-center gap-1"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 mb-6"
         >
-          ← Back
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to Role Details
         </button>
 
         {loadingJob || authLoading ? (
-          <div className="h-40 rounded-3xl bg-white p-8 border border-slate-200 animate-pulse" />
+          <div className="h-36 rounded-3xl bg-white p-8 border border-slate-200 animate-pulse" />
         ) : (
-          <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
-              SUBMITTING APPLICATION
-            </p>
+          <div className="mb-6 rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-indigo-700">
+              Direct ATS Application
+            </span>
 
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
+            <h1 className="mt-3 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
               {job?.title || "Job Application"}
             </h1>
 
-            <p className="mt-1 text-sm text-slate-500">
-              {companyName} • {job?.location || "Remote"} •{" "}
-              {job?.jobType || "Full Time"}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1 text-slate-700 font-semibold">
+                <Building2 className="h-3.5 w-3.5 text-indigo-600" />
+                {companyName}
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                {job?.location || "Remote"}
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1">
+                <Briefcase className="h-3.5 w-3.5 text-slate-400" />
+                {job?.jobType || "Full Time"}
+              </span>
+            </div>
           </div>
         )}
 
         {!authLoading && !isAuthenticated ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-3xl">
-              🔐
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <Lock className="h-6 w-6" />
             </div>
-            <h2 className="mt-4 text-2xl font-bold text-slate-900">
+            <h2 className="mt-4 text-xl font-bold text-slate-900">
               Sign in to Apply for This Role
             </h2>
-            <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
-              Create a free candidate account or sign in so your application,
-              resume, and live ATS interview status can be tracked in your
-              dashboard.
+            <p className="mt-2 text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              Create a candidate account or sign in so your application, resume, and live ATS interview status are tracked in your workspace.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
                 to={`/login?redirect=${encodeURIComponent(currentPath)}`}
-                className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-blue-700 transition"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
               >
-                Sign In to Apply →
+                Sign In to Apply
+                <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to={`/signup?redirect=${encodeURIComponent(currentPath)}`}
-                className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 transition"
+                className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
               >
                 Create Candidate Account
               </Link>
             </div>
           </div>
         ) : !authLoading && user?.role === "employer" ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <h2 className="text-xl font-bold text-slate-900">
-              Logged in as Employer
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900">
+              Signed in with an Employer Account
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Employer accounts manage job postings and review applicants. To apply
-              for jobs, please sign in with a Candidate account.
+            <p className="mt-2 text-xs sm:text-sm text-slate-500">
+              Employer accounts manage job postings and ATS pipelines. To apply for roles, please sign in with a Candidate account.
             </p>
             <Link
               to="/employer/dashboard"
-              className="mt-5 inline-block rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700"
+              className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white hover:bg-indigo-700"
             >
-              Go to Employer Dashboard →
+              Go to Employer Dashboard
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         ) : (
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-            <h2 className="text-xl font-bold text-slate-900">
-              Candidate Application Details
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900">
+              Candidate Credentials & Resume
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Review your contact details, highlight your matching skills, and
-              provide a link to your resume.
+              Confirm your details, highlight matching skills, and attach your cloud resume link.
             </p>
 
             {errorMessage && (
-              <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-                ⚠️ {errorMessage}
+              <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-medium text-rose-700">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </div>
             )}
 
             <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
               <div>
-                <label className="text-xs font-semibold text-slate-700">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Full Name *
                 </label>
                 <input
@@ -298,13 +322,13 @@ function Apply() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your full name"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                 />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Email Address *
                   </label>
                   <input
@@ -312,12 +336,12 @@ function Apply() {
                     type="email"
                     value={email}
                     disabled
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-100/80 px-3.5 py-2.5 text-sm text-slate-500 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Phone Number
                   </label>
                   <input
@@ -325,14 +349,14 @@ function Apply() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+1 (555) 000-0000"
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                   />
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Years of Relevant Experience *
                   </label>
                   <input
@@ -342,13 +366,14 @@ function Apply() {
                     max={50}
                     value={experience}
                     onChange={(e) => setExperience(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 bg-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">
-                    Resume Link (PDF / Google Drive / Portfolio URL) *
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                    <LinkIcon className="h-3.5 w-3.5 text-indigo-600" />
+                    Resume Link (PDF / Google Drive URL) *
                   </label>
                   <input
                     required
@@ -356,13 +381,14 @@ function Apply() {
                     value={resumeURL}
                     onChange={(e) => setResumeURL(e.target.value)}
                     placeholder="https://drive.google.com/..."
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
+                  <Award className="h-3.5 w-3.5 text-indigo-600" />
                   Your Skills (comma separated)
                 </label>
                 <input
@@ -370,15 +396,15 @@ function Apply() {
                   value={skillsInput}
                   onChange={(e) => setSkillsInput(e.target.value)}
                   placeholder="React, TypeScript, Node.js..."
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                 />
 
                 {job?.requirements && job.requirements.length > 0 && (
-                  <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3.5">
-                    <p className="text-xs font-semibold text-slate-700">
+                  <div className="mt-3 rounded-2xl bg-slate-50 border border-slate-200/80 p-3.5">
+                    <p className="text-xs font-bold text-slate-700">
                       Role Required Skills (click to toggle skills you have):
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {job.requirements.map((req, idx) => {
                         const isMatched = normalizedCandidateSkills.includes(
                           req.toLowerCase().trim(),
@@ -388,10 +414,10 @@ function Apply() {
                             key={idx}
                             type="button"
                             onClick={() => toggleRequiredSkill(req)}
-                            className={`rounded-full px-3 py-1 text-xs font-semibold transition border ${
+                            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition border ${
                               isMatched
                                 ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                                : "bg-white border-slate-200 text-slate-600 hover:border-blue-300"
+                                : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                             }`}
                           >
                             {isMatched ? "✓ " : "+ "}
@@ -405,24 +431,25 @@ function Apply() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700">
-                  Cover Letter / Why You Are a Great Fit
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Cover Letter / Note to Hiring Manager
                 </label>
                 <textarea
                   rows={4}
                   value={coverLetter}
                   onChange={(e) => setCoverLetter(e.target.value)}
                   placeholder="Share your relevant background, key projects, or why you'd excel in this position..."
-                  className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 hover:shadow-xl disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-700 disabled:opacity-50"
               >
-                {submitting ? "Submitting Application..." : "Submit Application →"}
+                <Send className="h-4 w-4" />
+                {submitting ? "Submitting Application..." : "Submit Application"}
               </button>
             </form>
           </div>

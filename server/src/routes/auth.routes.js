@@ -8,9 +8,10 @@ const router = Router();
 router.post("/register", (req, res) => authController.register(req, res));
 router.post("/signup", (req, res) => authController.register(req, res));
 
-// Login / Signin
+// Login / Signin (Email+Password or Firebase Google ID Token)
 router.post("/login", (req, res) => authController.login(req, res));
 router.post("/signin", (req, res) => authController.login(req, res));
+router.post("/google", (req, res) => authController.login(req, res));
 
 // Current authenticated user & live permissions
 router.get("/me", authenticate, (req, res) => authController.getMe(req, res));

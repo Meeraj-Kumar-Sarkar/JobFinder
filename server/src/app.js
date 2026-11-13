@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import companyRoutes from "./routes/company.routes.js";
 import jobRoutes from "./routes/job.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 import {
   sanitizeRequest,
   createRateLimiter,
@@ -127,6 +128,7 @@ app.use("/api/users", apiLimiter, userRoutes);
 app.use("/api/companies", apiLimiter, companyRoutes);
 app.use("/api/jobs", apiLimiter, jobRoutes);
 app.use("/api/applications", apiLimiter, applicationRoutes);
+app.use("/api/notifications", apiLimiter, notificationRoutes);
 
 // Direct routes (backward-compatible)
 app.post("/create_newUser", authLimiter, create_newUser);
