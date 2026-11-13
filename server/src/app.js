@@ -31,13 +31,13 @@ app.use(helmet());
 // 2. Strict CORS Configuration
 const getAllowedOrigins = () =>
   [
-    process.env.CLIENT_URL,
+    ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : []),
     "http://localhost:5173",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
   ]
-    .filter(Boolean)
-    .map((url) => url.replace(/\/+$/, ""));
+    .map((url) => (url ? url.trim().replace(/\/+$/, "") : ""))
+    .filter(Boolean);
 
 app.use(
   cors({
@@ -55,19 +55,19 @@ app.use(
         return callback(null, true);
       }
 
-      // Allow localhost in non-production or preview URLs when CLIENT_URL is not yet locked down
       if (
-        process.env.NODE_ENV !== "production" &&
-        normalizedOrigin.startsWith("http://localhost:")
+        normalizedOrigin.startsWith("http://localhost:") ||
+        normalizedOrigin.startsWith("http://127.0.0.1:")
       ) {
         return callback(null, true);
       }
 
       if (
-        !process.env.CLIENT_URL &&
-        (normalizedOrigin.endsWith(".vercel.app") ||
-          normalizedOrigin.endsWith(".netlify.app") ||
-          normalizedOrigin.endsWith(".onrender.com"))
+        normalizedOrigin.endsWith(".vercel.app") ||
+        normalizedOrigin.endsWith(".netlify.app") ||
+        normalizedOrigin.endsWith(".onrender.com") ||
+        normalizedOrigin.endsWith(".web.app") ||
+        normalizedOrigin.endsWith(".firebaseapp.com")
       ) {
         return callback(null, true);
       }
@@ -98,7 +98,25 @@ const apiLimiter = createRateLimiter({
   message: "Too many API requests from this IP. Please slow down.",
 });
 
-// Health check endpoint
+// Root & Health check endpoints
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "JobFinder API is running",
+    health: "/health",
+    jobs: "/api/jobs",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/api", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "JobFinder REST API v1",
+    endpoints: ["/api/jobs", "/api/auth", "/api/applications", "/api/users", "/api/companies"],
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });

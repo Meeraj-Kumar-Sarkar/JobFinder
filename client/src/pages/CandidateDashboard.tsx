@@ -15,6 +15,7 @@ function CandidateDashboard() {
 
   // Profile form state
   const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [headline, setHeadline] = useState(user?.headline || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [skills, setSkills] = useState(user?.skills ? user.skills.join(", ") : "");
@@ -26,6 +27,7 @@ function CandidateDashboard() {
   useEffect(() => {
     if (user) {
       setName(user.name || "");
+      setPhone(user.phone || "");
       setHeadline(user.headline || "");
       setBio(user.bio || "");
       setSkills(user.skills ? user.skills.join(", ") : "");
@@ -78,9 +80,10 @@ function CandidateDashboard() {
         .filter(Boolean);
 
       const res = await usersApi.updateProfile({
-        name,
-        headline,
-        bio,
+        name: name.trim(),
+        phone: phone.trim(),
+        headline: headline.trim(),
+        bio: bio.trim(),
         skills: parsedSkills,
         experience: Number(experience),
         resumeURL: resumeURL.trim(),
@@ -293,7 +296,7 @@ function CandidateDashboard() {
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="pb-3 font-semibold">Job Title & Role</th>
+                        <th className="pb-3 font-semibold">Job Title & Updates</th>
                         <th className="pb-3 font-semibold">Company</th>
                         <th className="pb-3 font-semibold">Date Applied</th>
                         <th className="pb-3 font-semibold">ATS Status</th>
@@ -324,9 +327,15 @@ function CandidateDashboard() {
                                 jobTitle
                               )}
                               {app.interviewDate && (
-                                <p className="text-xs text-purple-600 font-normal mt-0.5">
-                                  📅 Interview:{" "}
+                                <p className="text-xs text-purple-700 font-semibold mt-1">
+                                  📅 Interview Scheduled:{" "}
                                   {new Date(app.interviewDate).toLocaleString()}
+                                </p>
+                              )}
+                              {app.feedback && (
+                                <p className="text-xs text-slate-600 font-normal mt-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 max-w-md">
+                                  💬 <span className="font-semibold">Hiring Team Note:</span>{" "}
+                                  {app.feedback}
                                 </p>
                               )}
                             </td>
@@ -350,7 +359,7 @@ function CandidateDashboard() {
                             </td>
 
                             <td className="py-4 text-right">
-                              {["Applied", "Screening"].includes(app.status) && (
+                              {!["Hired", "Rejected"].includes(app.status) && (
                                 <button
                                   onClick={() => handleWithdraw(app._id)}
                                   className="text-xs font-semibold text-red-600 hover:text-red-800 transition"
@@ -376,21 +385,36 @@ function CandidateDashboard() {
                 Edit Candidate Profile
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Keep your profile and resume updated so employers can discover and evaluate you.
+                Keep your contact details, skills, and resume link updated so employers can evaluate your applications.
               </p>
 
               <form className="mt-6 space-y-5" onSubmit={handleSaveProfile}>
-                <div>
-                  <label className="text-xs font-semibold text-slate-700">
-                    Full Name
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Full Name *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+1 (555) 000-0000"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -440,6 +464,7 @@ function CandidateDashboard() {
                     <input
                       type="number"
                       min={0}
+                      max={50}
                       value={experience}
                       onChange={(e) => setExperience(Number(e.target.value))}
                       className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
@@ -456,7 +481,7 @@ function CandidateDashboard() {
                       type="url"
                       value={resumeURL}
                       onChange={(e) => setResumeURL(e.target.value)}
-                      placeholder="https://example.com/resume.pdf"
+                      placeholder="https://drive.google.com/..."
                       className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
@@ -469,7 +494,7 @@ function CandidateDashboard() {
                       type="url"
                       value={portfolioURL}
                       onChange={(e) => setPortfolioURL(e.target.value)}
-                      placeholder="https://myportfolio.com"
+                      placeholder="https://github.com/yourusername"
                       className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
                     />
                   </div>

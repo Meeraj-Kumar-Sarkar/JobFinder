@@ -38,12 +38,12 @@ export class ApplicationController {
       const candidateId =
         req.body.candidateId || req.body.candidate || req.user?._id;
       const jobId = req.body.jobId || req.body.job;
-      const { resumeURL, coverLetter, bypassSkillCheck } = req.body;
+      const { resumeURL, coverLetter, phone, experience, skills, bypassSkillCheck } = req.body;
 
       if (!candidateId || !jobId) {
         return res.status(400).json({
           success: false,
-          message: "Candidate ID and Job ID are required",
+          message: "Please sign in as a candidate to submit an application",
         });
       }
 
@@ -52,6 +52,9 @@ export class ApplicationController {
         jobId,
         resumeURL,
         coverLetter,
+        phone,
+        experience,
+        skills,
         bypassSkillCheck: bypassSkillCheck !== undefined ? Boolean(bypassSkillCheck) : true,
       });
 

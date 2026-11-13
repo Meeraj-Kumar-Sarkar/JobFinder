@@ -25,7 +25,7 @@ export class UserService {
   }
 
   /**
-   * Update general user profile
+   * Update user profile (supports both general and candidate/worker fields)
    */
   async updateUserProfile(userId, updateData) {
     if (!isValidObjectId(userId)) {
@@ -37,15 +37,86 @@ export class UserService {
       throw new ServiceError(404, "User not found");
     }
 
-    // Allowed common fields
-    const allowed = ["name", "phone", "profileImage", "headline", "bio"];
-    for (const field of allowed) {
-      if (updateData[field] !== undefined) {
-        user[field] =
-          field === "profileImage"
-            ? sanitizeUrl(updateData[field])
-            : String(updateData[field]).trim();
+    if (updateData.name !== undefined) {
+      const trimmedName = String(updateData.name).trim();
+      if (!trimmedName) {
+        throw new ServiceError(400, "Name cannot be empty");
       }
+      user.name = trimmedName;
+    }
+
+    if (updateData.phone !== undefined) {
+      user.phone = String(updateData.phone).trim();
+    }
+
+    if (updateData.profileImage !== undefined) {
+      user.profileImage = updateData.profileImage
+        ? sanitizeUrl(updateData.profileImage)
+        : "";
+    }
+
+    if (updateData.headline !== undefined) {
+      user.headline = String(updateData.headline).trim();
+    }
+
+    if (updateData.bio !== undefined) {
+      user.bio = String(updateData.bio).trim();
+    }
+
+    if (updateData.skills !== undefined) {
+      if (Array.isArray(updateData.skills)) {
+        user.skills = updateData.skills.map((s) => String(s).trim()).filter(Boolean);
+      } else if (typeof updateData.skills === "string") {
+        user.skills = updateData.skills
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+
+    if (updateData.experience !== undefined) {
+      const expNum = Number(updateData.experience);
+      if (!isNaN(expNum) && expNum >= 0) {
+        user.experience = expNum;
+      }
+    }
+
+    if (updateData.education !== undefined && Array.isArray(updateData.education)) {
+      user.education = updateData.education;
+    }
+
+    if (updateData.resumeURL !== undefined) {
+      const rawResume = String(updateData.resumeURL).trim();
+      if (rawResume) {
+        const safeResume = sanitizeUrl(rawResume);
+        if (!safeResume) {
+          throw new ServiceError(400, "Please provide a valid HTTP/HTTPS URL for your resume");
+        }
+        user.resumeURL = safeResume;
+      } else {
+        user.resumeURL = "";
+      }
+    }
+
+    if (updateData.portfolioURL !== undefined) {
+      const rawPortfolio = String(updateData.portfolioURL).trim();
+      if (rawPortfolio) {
+        const safePortfolio = sanitizeUrl(rawPortfolio);
+        if (!safePortfolio) {
+          throw new ServiceError(400, "Please provide a valid HTTP/HTTPS URL for your portfolio");
+        }
+        user.portfolioURL = safePortfolio;
+      } else {
+        user.portfolioURL = "";
+      }
+    }
+
+    if (updateData.expectedSalary !== undefined) {
+      user.expectedSalary = Number(updateData.expectedSalary);
+    }
+
+    if (updateData.preferredJobType !== undefined) {
+      user.preferredJobType = String(updateData.preferredJobType).trim();
     }
 
     await user.save();

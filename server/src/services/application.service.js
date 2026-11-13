@@ -63,8 +63,36 @@ export class ApplicationService {
     if (!finalResumeURL) {
       throw new ServiceError(
         400,
-        "A valid HTTP/HTTPS Resume URL is required. Please provide a resumeURL or update your candidate profile with a resume.",
+        "A valid HTTP/HTTPS Resume URL is required. Please provide a resume link.",
       );
+    }
+
+    // Sync candidate profile fields if provided during application submission
+    let candidateModified = false;
+    if (!candidate.resumeURL && finalResumeURL) {
+      candidate.resumeURL = finalResumeURL;
+      candidateModified = true;
+    }
+    if (input.phone && typeof input.phone === "string" && input.phone.trim()) {
+      candidate.phone = input.phone.trim();
+      candidateModified = true;
+    }
+    if (input.experience !== undefined && !isNaN(Number(input.experience)) && Number(input.experience) >= 0) {
+      candidate.experience = Number(input.experience);
+      candidateModified = true;
+    }
+    if (Array.isArray(input.skills) && input.skills.length > 0) {
+      const mergedSkills = Array.from(
+        new Set([
+          ...(candidate.skills || []),
+          ...input.skills.map((s) => String(s).trim()).filter(Boolean),
+        ]),
+      );
+      candidate.skills = mergedSkills;
+      candidateModified = true;
+    }
+    if (candidateModified) {
+      await candidate.save();
     }
 
     // Skill match evaluation
@@ -483,7 +511,14 @@ export class ApplicationService {
       throw new ServiceError(400, "Invalid application ID format");
     }
 
-    if (decision !== "Hired" && decision !== "Rejected") {
+    const normalizedDecision =
+      typeof decision === "string" && decision.toLowerCase().startsWith("hire")
+        ? "Hired"
+        : typeof decision === "string" && decision.toLowerCase().startsWith("reject")
+          ? "Rejected"
+          : decision;
+
+    if (normalizedDecision !== "Hired" && normalizedDecision !== "Rejected") {
       throw new ServiceError(400, 'Decision must be either "Hired" or "Rejected"');
     }
 
@@ -493,7 +528,7 @@ export class ApplicationService {
     }
 
     const previousStatus = application.status;
-    application.status = decision;
+    application.status = normalizedDecision;
     if (feedback) {
       application.feedback = feedback.trim();
     }
@@ -508,7 +543,7 @@ export class ApplicationService {
       throw new ServiceError(404, "Associated job or candidate user not found");
     }
 
-    if (decision === "Hired" && previousStatus !== "Hired") {
+    if (normalizedDecision === "Hired" && previousStatus !== "Hired") {
       await this.handleHiredSideEffects(application);
     }
 
@@ -516,9 +551,9 @@ export class ApplicationService {
     try {
       await Notification.create({
         user: candidate._id,
-        title: `Application Decision: ${decision}`,
+        title: `Application Decision: ${normalizedDecision}`,
         message:
-          decision === "Hired"
+          normalizedDecision === "Hired"
             ? `Congratulations! You have been hired for the position of "${job.title}".`
             : `Thank you for your interest. Unfortunately, your application for "${job.title}" was not selected.`,
         isRead: false,
@@ -530,7 +565,7 @@ export class ApplicationService {
     return {
       application,
       candidateName: candidate.name,
-      decision,
+      decision: normalizedDecision,
     };
   }
 

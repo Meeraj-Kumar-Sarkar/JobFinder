@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
@@ -12,6 +12,8 @@ function Login() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,16 +21,22 @@ function Login() {
     setSubmitting(true);
 
     try {
-      const loggedUser = await login({ email, password });
+      const loggedUser = await login({ email: email.trim(), password });
       toast.success(`Welcome back, ${loggedUser.name}!`);
-      if (loggedUser.role === "employer") {
+
+      if (redirectParam && redirectParam.startsWith("/")) {
+        navigate(redirectParam);
+      } else if (loggedUser.role === "employer") {
         navigate("/employer/dashboard");
       } else {
         navigate("/dashboard");
       }
     } catch (err: any) {
       const msg =
-        err.response?.data?.message || "Login failed. Please check your credentials.";
+        err.response?.data?.message ||
+        (err.code === "ERR_NETWORK"
+          ? "Unable to reach the server. Please check your connection and try again."
+          : "Sign in failed. Please check your email and password.");
       setErrorMessage(msg);
       toast.error(msg);
     } finally {
@@ -36,29 +44,9 @@ function Login() {
     }
   };
 
-  const handleQuickDemo = async (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMessage("");
-    setSubmitting(true);
-
-    try {
-      const loggedUser = await login({ email: demoEmail, password: demoPass });
-      toast.success(`Logged in as ${loggedUser.name}!`);
-      if (loggedUser.role === "employer") {
-        navigate("/employer/dashboard");
-      } else {
-        navigate("/dashboard");
-      }
-    } catch (err: any) {
-      const msg =
-        err.response?.data?.message || "Demo login failed. Make sure the server is running.";
-      setErrorMessage(msg);
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const signupUrl = redirectParam
+    ? `/signup?redirect=${encodeURIComponent(redirectParam)}`
+    : "/signup";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10">
@@ -86,21 +74,27 @@ function Login() {
             </h2>
 
             <p className="mt-5 leading-7 text-blue-100">
-              Explore thousands of jobs, connect with top companies, and track
-              every step of your application in real-time.
+              Explore verified job openings, connect directly with hiring teams,
+              and track every step of your application in real time.
             </p>
+
+            <div className="mt-8 space-y-3 text-sm text-blue-100">
+              <p>✓ Direct applications to hiring managers</p>
+              <p>✓ Live ATS stage updates & interview scheduling</p>
+              <p>✓ Dedicated dashboards for Candidates & Employers</p>
+            </div>
           </div>
 
           <p className="text-sm text-blue-200">© 2026 JobFinder Portal</p>
         </div>
 
         {/* Right Side */}
-        <div className="p-8 sm:p-12">
-          <Link to="/" className="text-sm font-semibold text-blue-600 lg:hidden">
+        <div className="p-8 sm:p-12 flex flex-col justify-center">
+          <Link to="/" className="text-sm font-semibold text-blue-600 lg:hidden mb-6">
             ← Back to Home
           </Link>
 
-          <div className="mt-8 lg:mt-0">
+          <div>
             <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
               WELCOME BACK
             </p>
@@ -110,35 +104,8 @@ function Login() {
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Enter your credentials or try our one-click demo accounts below.
+              Enter your email and password to access your dashboard.
             </p>
-          </div>
-
-          {/* Quick Demo Logins */}
-          <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-            <p className="text-xs font-bold text-blue-800">⚡ QUICK DEMO ACCESS:</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  handleQuickDemo("candidate@example.com", "Password123!")
-                }
-                disabled={submitting}
-                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm border border-blue-200 hover:bg-blue-600 hover:text-white transition disabled:opacity-50"
-              >
-                👤 Login as Candidate (Alex)
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleQuickDemo("employer@technova.com", "Password123!")
-                }
-                disabled={submitting}
-                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm border border-indigo-200 hover:bg-indigo-600 hover:text-white transition disabled:opacity-50"
-              >
-                🏢 Login as Employer (TechNova)
-              </button>
-            </div>
           </div>
 
           {errorMessage && (
@@ -147,7 +114,7 @@ function Login() {
             </div>
           )}
 
-          <form className="mt-6 space-y-4" onSubmit={handleLogin}>
+          <form className="mt-6 space-y-5" onSubmit={handleLogin}>
             <div>
               <label className="text-sm font-semibold text-slate-700">
                 Email Address
@@ -156,6 +123,7 @@ function Login() {
               <input
                 required
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -174,6 +142,7 @@ function Login() {
                 <input
                   required
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -183,7 +152,8 @@ function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
@@ -201,7 +171,7 @@ function Login() {
 
           <p className="mt-6 text-center text-sm text-slate-500">
             Don't have an account?{" "}
-            <Link to="/signup" className="font-semibold text-blue-600 hover:underline">
+            <Link to={signupUrl} className="font-semibold text-blue-600 hover:underline">
               Create an account
             </Link>
           </p>

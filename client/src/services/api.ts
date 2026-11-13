@@ -1,12 +1,27 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 
-// Resolve API base URL: ensures that '/api' is present regardless of whether the user
-// provides 'https://example.com' or 'https://example.com/api' in VITE_API_URL
-const rawApiUrl = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").trim();
-const normalizedApiUrl = rawApiUrl.replace(/\/+$/, "");
-const API_BASE_URL = normalizedApiUrl.endsWith("/api")
-  ? normalizedApiUrl
-  : `${normalizedApiUrl}/api`;
+const LIVE_FALLBACK_API_URL = "https://jobfinder-gc0s.onrender.com/api";
+
+function resolveInitialApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_URL || "").trim();
+  if (envUrl) {
+    const normalized = envUrl.replace(/\/+$/, "");
+    return normalized.endsWith("/api") ? normalized : `${normalized}/api`;
+  }
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:5000/api";
+    }
+    // On deployed hosts (Vercel/Netlify/Render), use relative '/api' rewrite first
+    return "/api";
+  }
+
+  return "http://localhost:5000/api";
+}
+
+export const API_BASE_URL = resolveInitialApiBaseUrl();
 
 /**
  * Validates external URLs on the client to prevent javascript: or data: URI XSS in href attributes
@@ -28,6 +43,7 @@ export function getSafeExternalUrl(url?: string | null): string | null {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 45000, // 45s timeout to gracefully handle Render cold starts
   headers: {
     "Content-Type": "application/json",
   },
@@ -45,14 +61,69 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Response interceptor for handling 401 unauthenticated
+// Response interceptor:
+// 1. If a static host without '/api' rewrite returns index.html (text/html) for an '/api' request,
+//    automatically switch to the live Render backend and retry the request.
+// 2. Retry once on transient network / 502 / 503 / 504 cold-start errors.
+// 3. Clear invalid/expired JWT on 401.
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  async (response) => {
+    const contentType = String(response.headers?.["content-type"] || "");
+    const config = response.config as InternalAxiosRequestConfig & {
+      _retriedDirectBackend?: boolean;
+    };
+
+    if (
+      contentType.includes("text/html") &&
+      typeof response.data === "string" &&
+      !config._retriedDirectBackend &&
+      api.defaults.baseURL === "/api"
+    ) {
+      config._retriedDirectBackend = true;
+      api.defaults.baseURL = LIVE_FALLBACK_API_URL;
+      config.baseURL = LIVE_FALLBACK_API_URL;
+      return api.request(config);
+    }
+
+    return response;
+  },
+  async (error) => {
+    const config = error.config as
+      | (InternalAxiosRequestConfig & {
+          _retryCount?: number;
+          _retriedDirectBackend?: boolean;
+        })
+      | undefined;
+
+    // If relative '/api' returned 404/405 from a static host that didn't proxy '/api', switch to live backend
+    if (
+      config &&
+      !config._retriedDirectBackend &&
+      api.defaults.baseURL === "/api" &&
+      (error.response?.status === 404 || error.response?.status === 405) &&
+      String(error.response?.headers?.["content-type"] || "").includes("text/html")
+    ) {
+      config._retriedDirectBackend = true;
+      api.defaults.baseURL = LIVE_FALLBACK_API_URL;
+      config.baseURL = LIVE_FALLBACK_API_URL;
+      return api.request(config);
+    }
+
+    // Retry once on transient cold-start or gateway errors for idempotent GET requests
+    if (
+      config &&
+      (config.method || "get").toLowerCase() === "get" &&
+      (config._retryCount || 0) < 1 &&
+      (!error.response || [502, 503, 504].includes(error.response.status))
+    ) {
+      config._retryCount = (config._retryCount || 0) + 1;
+      await new Promise((r) => setTimeout(r, 1500));
+      return api.request(config);
+    }
+
     if (error.response?.status === 401) {
-      // If token is invalid or expired, clear it
       const currentToken = localStorage.getItem("jobportal_token");
-      if (currentToken && !error.config.url?.includes("/auth/login")) {
+      if (currentToken && !error.config?.url?.includes("/auth/login")) {
         localStorage.removeItem("jobportal_token");
         localStorage.removeItem("jobportal_user");
       }
@@ -75,7 +146,7 @@ export interface User {
   experience?: number;
   resumeURL?: string;
   portfolioURL?: string;
-  company?: string | { _id: string; name: string };
+  company?: string | { _id: string; name: string; industry?: string; location?: string; website?: string };
   companyRole?: string;
   createdAt?: string;
 }
@@ -116,6 +187,7 @@ export interface Application {
   resumeURL: string;
   coverLetter?: string;
   interviewDate?: string;
+  feedback?: string;
   status:
     | "Applied"
     | "Screening"
@@ -194,12 +266,11 @@ export const applicationsApi = {
     candidateId?: string;
     resumeURL: string;
     coverLetter?: string;
-    bypassSkillCheck?: boolean;
+    phone?: string;
+    experience?: number;
+    skills?: string[];
   }) => {
-    const res = await api.post("/applications", {
-      ...data,
-      bypassSkillCheck: true,
-    });
+    const res = await api.post("/applications", data);
     return res.data;
   },
 
@@ -240,9 +311,15 @@ export const applicationsApi = {
     return res.data;
   },
 
-  hiringDecision: async (applicationId: string, decision: "hire" | "reject", feedback?: string) => {
+  hiringDecision: async (
+    applicationId: string,
+    decision: "Hired" | "Rejected" | "hire" | "reject",
+    feedback?: string,
+  ) => {
+    const normalized =
+      decision === "hire" ? "Hired" : decision === "reject" ? "Rejected" : decision;
     const res = await api.post(`/applications/${applicationId}/decision`, {
-      decision,
+      decision: normalized,
       feedback,
     });
     return res.data;

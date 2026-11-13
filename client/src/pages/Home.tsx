@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { jobsApi, type Job } from "../services/api";
@@ -8,25 +8,33 @@ function Home() {
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("");
   const [featuredJobs, setFeaturedJobs] = useState<Job[]>([]);
+  const [totalJobsCount, setTotalJobsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchFeatured = async () => {
-      try {
-        const res = await jobsApi.getAll({ limit: 6 });
-        const list = res.data?.jobs || res.data || [];
-        setFeaturedJobs(list);
-      } catch (err) {
-        console.error("Error loading featured jobs:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeatured();
+  const fetchFeatured = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await jobsApi.getAll({ limit: 6 });
+      const list = res.data?.jobs || res.data || [];
+      const total = res.data?.pagination?.total ?? list.length;
+      setFeaturedJobs(list);
+      setTotalJobsCount(total);
+    } catch (err) {
+      console.error("Error loading featured jobs:", err);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchFeatured();
+  }, [fetchFeatured]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,22 +48,32 @@ function Home() {
     {
       icon: "💻",
       title: "Technology",
-      jobs: "1,240+ Openings",
+      subtitle: "Software, Cloud, Data & AI Engineering",
     },
     {
       icon: "🎨",
       title: "Design",
-      jobs: "680+ Openings",
+      subtitle: "Product Design, UI/UX & Brand Systems",
     },
     {
       icon: "📊",
       title: "Marketing",
-      jobs: "520+ Openings",
+      subtitle: "Growth, Content, SEO & Product Marketing",
     },
     {
       icon: "💼",
       title: "Business",
-      jobs: "890+ Openings",
+      subtitle: "Operations, Product Management & Sales",
+    },
+    {
+      icon: "🩺",
+      title: "Healthcare",
+      subtitle: "Clinical, HealthTech & Medical Operations",
+    },
+    {
+      icon: "💰",
+      title: "Finance",
+      subtitle: "FinTech, Accounting & Financial Analysis",
     },
   ];
 
@@ -76,6 +94,10 @@ function Home() {
         return "📢";
       case "business":
         return "💼";
+      case "healthcare":
+        return "🩺";
+      case "finance":
+        return "💰";
       default:
         return "⚡";
     }
@@ -239,8 +261,8 @@ function Home() {
                 darkMode ? "text-slate-400" : "text-slate-500"
               }`}
             >
-              Discover active job opportunities from leading companies. Search,
-              submit one-click applications, and track your interview progress live.
+              Discover active job opportunities from verified companies. Search by role,
+              submit your application directly, and track your interview progress live.
             </p>
 
             {/* Search Form */}
@@ -318,7 +340,7 @@ function Home() {
                 >
                   <div className="flex gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-2xl">
-                      💻
+                      {getCategoryIcon(featuredJobs[0]?.category)}
                     </div>
 
                     <div>
@@ -367,7 +389,7 @@ function Home() {
                   >
                     <div className="flex gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-100 text-2xl">
-                        🎨
+                        {getCategoryIcon(featuredJobs[1]?.category)}
                       </div>
 
                       <div>
@@ -430,16 +452,16 @@ function Home() {
               Popular Job Categories
             </h2>
             <p className="mt-2 text-sm text-slate-500 max-w-lg mx-auto">
-              Browse openings across our core categories to find opportunities aligned with your background.
+              Browse openings across core industries to find opportunities aligned with your background.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {categories.map((cat) => (
               <Link
                 key={cat.title}
                 to={`/jobs?category=${encodeURIComponent(cat.title)}`}
-                className={`rounded-2xl border p-6 shadow-sm transition hover:-translate-y-2 hover:border-blue-400 hover:shadow-xl ${
+                className={`rounded-2xl border p-6 shadow-sm transition hover:-translate-y-1.5 hover:border-blue-400 hover:shadow-xl ${
                   darkMode
                     ? "border-slate-800 bg-slate-800/80"
                     : "border-slate-200 bg-slate-50/60"
@@ -450,10 +472,10 @@ function Home() {
                 </div>
 
                 <h3 className="mt-5 font-bold text-lg">{cat.title}</h3>
-                <p className="mt-1 text-xs text-slate-400">{cat.jobs}</p>
+                <p className="mt-1 text-xs text-slate-400">{cat.subtitle}</p>
 
                 <p className="mt-4 text-xs font-bold text-blue-600">
-                  Explore Openings →
+                  Explore {cat.title} Roles →
                 </p>
               </Link>
             ))}
@@ -487,7 +509,7 @@ function Home() {
               to="/jobs"
               className="rounded-xl border border-blue-600 px-5 py-2.5 text-xs font-bold text-blue-600 transition hover:bg-blue-600 hover:text-white"
             >
-              Browse All Jobs ({featuredJobs.length}+) →
+              Browse All Jobs {totalJobsCount > 0 ? `(${totalJobsCount})` : ""} →
             </Link>
           </div>
 
@@ -499,6 +521,46 @@ function Home() {
                   className="h-48 rounded-2xl bg-white border border-slate-200 animate-pulse"
                 />
               ))}
+            </div>
+          ) : loadError ? (
+            <div
+              className={`mt-10 rounded-3xl border p-10 text-center ${
+                darkMode
+                  ? "border-slate-800 bg-slate-900"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              <p className="text-base font-bold">
+                Unable to load featured jobs right now
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                The server may be waking up. Click below to retry.
+              </p>
+              <button
+                onClick={fetchFeatured}
+                className="mt-4 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition"
+              >
+                Retry Loading Jobs
+              </button>
+            </div>
+          ) : featuredJobs.length === 0 ? (
+            <div
+              className={`mt-10 rounded-3xl border p-10 text-center ${
+                darkMode
+                  ? "border-slate-800 bg-slate-900"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              <p className="text-lg font-bold">No active job postings yet</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Are you hiring? Post your first job opening on JobFinder.
+              </p>
+              <Link
+                to="/signup"
+                className="mt-4 inline-block rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition"
+              >
+                Post a Job as Employer →
+              </Link>
             </div>
           ) : (
             <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -593,12 +655,14 @@ function Home() {
               Browse All Jobs →
             </Link>
 
-            <Link
-              to="/signup"
-              className="rounded-xl border border-white/50 bg-white/10 backdrop-blur px-7 py-3.5 font-bold text-white transition hover:bg-white/20 text-sm"
-            >
-              Create Account
-            </Link>
+            {!isAuthenticated && (
+              <Link
+                to="/signup"
+                className="rounded-xl border border-white/50 bg-white/10 backdrop-blur px-7 py-3.5 font-bold text-white transition hover:bg-white/20 text-sm"
+              >
+                Create Account
+              </Link>
+            )}
           </div>
         </div>
       </section>

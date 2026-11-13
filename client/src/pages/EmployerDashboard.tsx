@@ -40,6 +40,7 @@ function EmployerDashboard() {
   // Interview Schedule Modal State
   const [scheduleModalApp, setScheduleModalApp] = useState<Application | null>(null);
   const [interviewDate, setInterviewDate] = useState("");
+  const [interviewNote, setInterviewNote] = useState("");
   const [scheduling, setScheduling] = useState(false);
 
   // Cover Letter View Modal
@@ -110,7 +111,6 @@ function EmployerDashboard() {
       });
 
       toast.success("Job posted successfully!");
-      // Reset form
       setJobTitle("");
       setDescription("");
       setRequirements("");
@@ -134,7 +134,7 @@ function EmployerDashboard() {
       setJobs((prev) =>
         prev.map((j) => (j._id === jobId ? { ...j, status: nextStatus } : j)),
       );
-    } catch (err: any) {
+    } catch {
       toast.error("Failed to update job status.");
     }
   };
@@ -143,9 +143,9 @@ function EmployerDashboard() {
   const handleStatusChange = async (applicationId: string, newStatus: string) => {
     try {
       if (newStatus === "Hired") {
-        await applicationsApi.hiringDecision(applicationId, "hire");
+        await applicationsApi.hiringDecision(applicationId, "Hired");
       } else if (newStatus === "Rejected") {
-        await applicationsApi.hiringDecision(applicationId, "reject");
+        await applicationsApi.hiringDecision(applicationId, "Rejected");
       } else {
         await applicationsApi.updateStatus(applicationId, newStatus);
       }
@@ -169,10 +169,15 @@ function EmployerDashboard() {
 
     setScheduling(true);
     try {
-      await applicationsApi.scheduleInterview(scheduleModalApp._id, interviewDate);
+      await applicationsApi.scheduleInterview(
+        scheduleModalApp._id,
+        interviewDate,
+        interviewNote.trim() || undefined,
+      );
       toast.success("Interview scheduled successfully!");
       setScheduleModalApp(null);
       setInterviewDate("");
+      setInterviewNote("");
       fetchData();
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to schedule interview.";
@@ -461,7 +466,7 @@ function EmployerDashboard() {
                     Applicant Tracking Pipeline (ATS)
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Review resumes, advance candidates through stages, and schedule interviews.
+                    Review resumes, evaluate skills, advance candidates through stages, and schedule interviews.
                   </p>
                 </div>
 
@@ -498,7 +503,7 @@ function EmployerDashboard() {
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500">
-                        <th className="pb-3 font-semibold">Candidate</th>
+                        <th className="pb-3 font-semibold">Candidate & Skills</th>
                         <th className="pb-3 font-semibold">Role Applied</th>
                         <th className="pb-3 font-semibold">Resume & Details</th>
                         <th className="pb-3 font-semibold">Stage / Status</th>
@@ -507,14 +512,23 @@ function EmployerDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredApplications.map((app) => {
-                        const cand = typeof app.candidate === "object" ? app.candidate as User : null;
-                        const job = typeof app.job === "object" ? app.job as Job : null;
+                        const cand =
+                          typeof app.candidate === "object"
+                            ? (app.candidate as User)
+                            : null;
+                        const job =
+                          typeof app.job === "object" ? (app.job as Job) : null;
 
                         return (
                           <tr key={app._id} className="hover:bg-slate-50/60 transition">
                             <td className="py-4">
                               <p className="font-bold text-slate-900">
                                 {cand?.name || "Candidate"}
+                                {cand?.experience !== undefined && (
+                                  <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                    {cand.experience} yr{cand.experience === 1 ? "" : "s"} exp
+                                  </span>
+                                )}
                               </p>
                               <p className="text-xs text-slate-500">{cand?.email}</p>
                               {cand?.phone && (
@@ -522,6 +536,23 @@ function EmployerDashboard() {
                               )}
                               {cand?.headline && (
                                 <p className="text-xs text-blue-600 mt-0.5">{cand.headline}</p>
+                              )}
+                              {cand?.skills && cand.skills.length > 0 && (
+                                <div className="mt-1.5 flex flex-wrap gap-1 max-w-xs">
+                                  {cand.skills.slice(0, 5).map((skill, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {cand.skills.length > 5 && (
+                                    <span className="text-[10px] text-slate-400">
+                                      +{cand.skills.length - 5}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
 
@@ -591,7 +622,10 @@ function EmployerDashboard() {
 
                             <td className="py-4 text-right">
                               <button
-                                onClick={() => setScheduleModalApp(app)}
+                                onClick={() => {
+                                  setScheduleModalApp(app);
+                                  setInterviewNote(app.feedback || "");
+                                }}
                                 className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition"
                               >
                                 📅 Interview
@@ -796,7 +830,7 @@ function EmployerDashboard() {
               Schedule Candidate Interview
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Select date and time for candidate interview.
+              Select the interview date/time and include meeting details for the candidate.
             </p>
 
             <form className="mt-5 space-y-4" onSubmit={handleScheduleSubmit}>
@@ -813,10 +847,26 @@ function EmployerDashboard() {
                 />
               </div>
 
+              <div>
+                <label className="text-xs font-semibold text-slate-700">
+                  Meeting Link / Instructions for Candidate (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={interviewNote}
+                  onChange={(e) => setInterviewNote(e.target.value)}
+                  placeholder="e.g. Google Meet link or preparation instructions..."
+                  className="mt-1 w-full resize-none rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+
               <div className="flex gap-2 justify-end pt-2">
                 <button
                   type="button"
-                  onClick={() => setScheduleModalApp(null)}
+                  onClick={() => {
+                    setScheduleModalApp(null);
+                    setInterviewNote("");
+                  }}
                   className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
                 >
                   Cancel

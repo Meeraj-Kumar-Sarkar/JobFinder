@@ -5,8 +5,14 @@ import { env } from "./config/env.js";
 
 const PORT = env.PORT || 5000;
 
-app.listen(PORT, async () => {
+const startServer = async () => {
   await connectDatabase();
-  await seedDatabase();
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+  if (process.env.SEED_DEMO_DATA === "true") {
+    await seedDatabase();
+  }
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+};
+
+startServer();
