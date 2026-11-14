@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { applicationsApi, usersApi, type Application } from "../services/api";
@@ -174,7 +175,7 @@ function CandidateDashboard() {
       <div className="mx-auto w-full max-w-7xl flex-1 flex flex-col lg:flex-row gap-6 px-4 py-8 sm:px-6">
         {/* Sidebar */}
         <aside className="w-full lg:w-72 shrink-0">
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm sticky top-24">
+          <div className="glass-panel rounded-3xl p-6 sticky top-24">
             <div className="flex items-center gap-3.5 pb-6 border-b border-slate-100">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 font-bold text-white text-lg shadow-sm shadow-indigo-500/20">
                 {user?.name?.[0]?.toUpperCase() || "C"}
@@ -273,7 +274,7 @@ function CandidateDashboard() {
             <div className="flex items-center gap-2.5">
               <Link
                 to="/notifications"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-indigo-200 hover:text-indigo-600 transition"
+                className="glass-panel inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 hover:border-indigo-200 hover:text-indigo-600 transition"
               >
                 <Bell className="h-4 w-4 text-indigo-600" />
                 Inbox
@@ -285,7 +286,7 @@ function CandidateDashboard() {
               </Link>
               <Link
                 to="/jobs"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 transition"
+                className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white"
               >
                 Browse Roles
                 <ArrowUpRight className="h-4 w-4" />
@@ -295,7 +296,7 @@ function CandidateDashboard() {
 
           {/* Dynamic Statistics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500">Total Applied</span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
@@ -305,7 +306,7 @@ function CandidateDashboard() {
               <p className="text-2xl font-extrabold text-slate-900 mt-2">{stats.total}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500">Under Review</span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
@@ -315,7 +316,7 @@ function CandidateDashboard() {
               <p className="text-2xl font-extrabold text-amber-600 mt-2">{stats.underReview}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500">Interview Stage</span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
@@ -325,7 +326,7 @@ function CandidateDashboard() {
               <p className="text-2xl font-extrabold text-purple-600 mt-2">{stats.interviewing}</p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500">Offers / Hired</span>
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
@@ -336,9 +337,17 @@ function CandidateDashboard() {
             </div>
           </div>
 
+          <AnimatePresence mode="wait">
           {/* TAB 1: APPLICATIONS */}
           {activeTab === "applications" && (
-            <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+            <motion.div
+              key="applications"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35 }}
+              className="glass-panel rounded-3xl p-6 sm:p-8"
+            >
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
@@ -397,7 +406,7 @@ function CandidateDashboard() {
                     return (
                       <div
                         key={app._id}
-                        className="rounded-2xl border border-slate-200/90 bg-white p-5 transition hover:border-indigo-200 hover:shadow-sm"
+                        className="glass-card rounded-2xl p-5"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="flex items-start gap-3.5">
@@ -548,12 +557,19 @@ function CandidateDashboard() {
                   })}
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* TAB 2: CANDIDATE PROFILE */}
           {activeTab === "profile" && (
-            <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm max-w-3xl">
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35 }}
+              className="glass-panel rounded-3xl p-6 sm:p-8 max-w-3xl"
+            >
               <div className="flex items-center gap-3 pb-5 border-b border-slate-100">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                   <Sparkles className="h-5 w-5" />
@@ -687,15 +703,16 @@ function CandidateDashboard() {
                   <button
                     type="submit"
                     disabled={savingProfile}
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-700 transition disabled:opacity-50 text-xs"
+                    className="btn-premium inline-flex items-center gap-2 rounded-xl px-6 py-3 font-bold text-white disabled:opacity-50 text-xs"
                   >
                     <Save className="h-4 w-4" />
                     {savingProfile ? "Saving Profile..." : "Save Profile Changes"}
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </main>
       </div>
     </div>

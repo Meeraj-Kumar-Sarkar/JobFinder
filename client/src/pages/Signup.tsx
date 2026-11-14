@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   Briefcase,
@@ -12,6 +14,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 function Signup() {
@@ -39,6 +43,7 @@ function Signup() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const { register, loginWithGoogle } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectParam = searchParams.get("redirect");
@@ -147,8 +152,27 @@ function Signup() {
     : "/login";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-10 sm:px-6">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xl lg:grid-cols-2">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-10 sm:px-6">
+      {/* Floating Theme Toggle */}
+      <button
+        type="button"
+        onClick={toggleTheme}
+        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        className="glass-panel fixed right-5 top-5 z-50 flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:text-indigo-600 transition"
+      >
+        {isDark ? (
+          <Sun className="h-4 w-4 text-amber-400" />
+        ) : (
+          <Moon className="h-4 w-4" />
+        )}
+      </button>
+
+      <motion.div
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="glass-panel grid w-full max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-2"
+      >
         {/* Left Side */}
         <div className="relative hidden overflow-hidden bg-slate-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
           <div className="pointer-events-none absolute -top-24 -left-24 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" />
@@ -510,7 +534,7 @@ function Signup() {
             <button
               type="submit"
               disabled={submitting || googleLoading}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-700 disabled:opacity-50"
+              className="btn-premium mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
             >
               {submitting ? "Creating Account..." : "Create Account"}
               <ArrowRight className="h-4 w-4" />
@@ -527,7 +551,7 @@ function Signup() {
             </Link>
           </p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

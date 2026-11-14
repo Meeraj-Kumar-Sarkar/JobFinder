@@ -41,6 +41,74 @@ export function getSafeExternalUrl(url?: string | null): string | null {
   }
 }
 
+/**
+ * Resolves a job's creation Date from `createdAt` or falls back to the MongoDB ObjectId timestamp.
+ */
+export function getJobTimestamp(createdAt?: string, id?: string): Date | null {
+  if (createdAt) {
+    const parsed = new Date(createdAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  if (id && /^[0-9a-fA-F]{24}$/.test(id)) {
+    const seconds = parseInt(id.substring(0, 8), 16);
+    if (!Number.isNaN(seconds) && seconds > 0) {
+      return new Date(seconds * 1000);
+    }
+  }
+  return null;
+}
+
+/**
+ * Formats how old a job post is in a human-readable relative string (e.g., "Just now", "3h ago", "4 days ago").
+ */
+export function formatJobAge(
+  createdAt?: string,
+  id?: string,
+  withPrefix = false,
+): string {
+  const date = getJobTimestamp(createdAt, id);
+  if (!date) return withPrefix ? "Posted recently" : "Recently";
+
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  let label: string;
+  if (diffMin < 1) {
+    label = "Just now";
+  } else if (diffMin < 60) {
+    label = `${diffMin}m ago`;
+  } else if (diffHr < 24) {
+    label = `${diffHr}h ago`;
+  } else if (diffDays === 1) {
+    label = "1 day ago";
+  } else if (diffDays < 7) {
+    label = `${diffDays} days ago`;
+  } else if (diffWeeks === 1) {
+    label = "1 week ago";
+  } else if (diffDays < 30) {
+    label = `${diffWeeks} weeks ago`;
+  } else if (diffMonths === 1) {
+    label = "1 month ago";
+  } else if (diffDays < 365) {
+    label = `${diffMonths} months ago`;
+  } else if (diffYears === 1) {
+    label = "1 year ago";
+  } else {
+    label = `${diffYears} years ago`;
+  }
+
+  if (!withPrefix) return label;
+  return label === "Just now" ? "Posted just now" : `Posted ${label}`;
+}
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 45000, // 45s timeout to gracefully handle Render cold starts

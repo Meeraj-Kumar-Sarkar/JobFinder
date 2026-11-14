@@ -9,6 +9,21 @@
       content="JobFinder — Discover verified job opportunities, submit applications, and track your hiring progress in real time."
     />
     <title>JobFinder — Job Portal & Applicant Tracking</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('jobportal_theme');
+          var isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.style.colorScheme = 'light';
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

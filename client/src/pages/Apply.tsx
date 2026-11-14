@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import Navbar from "../components/Navbar";
-import { jobsApi, applicationsApi, type Job } from "../services/api";
+import { jobsApi, applicationsApi, formatJobAge, type Job } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
@@ -16,6 +17,7 @@ import {
   Link as LinkIcon,
   Award,
   Send,
+  Clock,
 } from "lucide-react";
 
 function Apply() {
@@ -169,7 +171,12 @@ function Apply() {
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
         <Navbar />
         <div className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-10 text-center shadow-xl border border-slate-200/80">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="glass-panel w-full max-w-lg rounded-3xl p-10 text-center"
+          >
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200">
               <CheckCircle2 className="h-8 w-8" />
             </div>
@@ -189,7 +196,7 @@ function Apply() {
             <div className="mt-8 flex flex-col gap-3">
               <Link
                 to="/dashboard"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-700"
+                className="btn-premium inline-flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white"
               >
                 Track in Candidate Workspace
                 <ArrowRight className="h-4 w-4" />
@@ -202,7 +209,7 @@ function Apply() {
                 View Notifications & Messages
               </Link>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     );
@@ -224,7 +231,12 @@ function Apply() {
         {loadingJob || authLoading ? (
           <div className="h-36 rounded-3xl bg-white p-8 border border-slate-200 animate-pulse" />
         ) : (
-          <div className="mb-6 rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="glass-panel mb-6 rounded-3xl p-6 sm:p-8"
+          >
             <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-indigo-700">
               Direct ATS Application
             </span>
@@ -248,12 +260,21 @@ function Apply() {
                 <Briefcase className="h-3.5 w-3.5 text-slate-400" />
                 {job?.jobType || "Full Time"}
               </span>
+              {job && (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 text-indigo-600 font-semibold">
+                    <Clock className="h-3.5 w-3.5" />
+                    {formatJobAge(job.createdAt, job._id, true)}
+                  </span>
+                </>
+              )}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {!authLoading && !isAuthenticated ? (
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-8 text-center shadow-sm">
+          <div className="glass-panel rounded-3xl p-8 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
               <Lock className="h-6 w-6" />
             </div>
@@ -266,7 +287,7 @@ function Apply() {
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
                 to={`/login?redirect=${encodeURIComponent(currentPath)}`}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition"
+                className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-6 py-3 text-xs font-bold text-white"
               >
                 Sign In to Apply
                 <ArrowRight className="h-4 w-4" />
@@ -280,7 +301,7 @@ function Apply() {
             </div>
           </div>
         ) : !authLoading && user?.role === "employer" ? (
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-8 text-center shadow-sm">
+          <div className="glass-panel rounded-3xl p-8 text-center">
             <h2 className="text-lg font-bold text-slate-900">
               Signed in with an Employer Account
             </h2>
@@ -289,14 +310,19 @@ function Apply() {
             </p>
             <Link
               to="/employer/dashboard"
-              className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-6 py-3 text-xs font-bold text-white hover:bg-indigo-700"
+              className="btn-premium mt-5 inline-flex items-center gap-1.5 rounded-xl px-6 py-3 text-xs font-bold text-white"
             >
               Go to Employer Dashboard
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         ) : (
-          <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className="glass-panel rounded-3xl p-6 sm:p-8"
+          >
             <h2 className="text-lg font-bold text-slate-900">
               Candidate Credentials & Resume
             </h2>
@@ -446,13 +472,13 @@ function Apply() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-700 disabled:opacity-50"
+                className="btn-premium inline-flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
                 {submitting ? "Submitting Application..." : "Submit Application"}
               </button>
             </form>
-          </div>
+          </motion.div>
         )}
       </main>
     </div>

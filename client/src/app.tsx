@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
@@ -15,23 +16,24 @@ import Notifications from "./pages/Notifications";
 
 function App() {
   return (
-    <AuthProvider>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            borderRadius: "14px",
-            background: "#0f172a",
-            color: "#fff",
-            fontSize: "13px",
-            fontWeight: 500,
-            padding: "12px 16px",
-          },
-        }}
-      />
-      <BrowserRouter>
-        <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              borderRadius: "14px",
+              background: "#0f172a",
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: 500,
+              padding: "12px 16px",
+            },
+          }}
+        />
+        <BrowserRouter>
+          <Routes>
           {/* Public Pages */}
           <Route path="/" element={<Home />} />
           <Route path="/jobs" element={<Jobs />} />
@@ -78,6 +80,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+  </ThemeProvider>
   );
 }
 

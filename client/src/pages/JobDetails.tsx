@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,7 +16,14 @@ import {
   Users,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
-import { jobsApi, applicationsApi, getSafeExternalUrl, type Job } from "../services/api";
+import {
+  jobsApi,
+  applicationsApi,
+  getSafeExternalUrl,
+  formatJobAge,
+  getJobTimestamp,
+  type Job,
+} from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 function JobDetails() {
@@ -116,14 +124,19 @@ function JobDetails() {
         )}
 
         {!loading && job && (
-          <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="grid gap-8 lg:grid-cols-[1fr_360px]"
+          >
             {/* Left Main Content */}
             <div className="space-y-6">
               {/* Header Card */}
-              <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xs">
+              <div className="glass-panel rounded-3xl p-6 sm:p-8">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex gap-4 sm:gap-5">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25">
                       <Briefcase className="h-7 w-7" />
                     </div>
 
@@ -140,6 +153,10 @@ function JobDetails() {
                           }`}
                         >
                           {job.status === "active" ? "Actively Hiring" : "Closed"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                          <Clock className="h-3 w-3 text-indigo-500" />
+                          {formatJobAge(job.createdAt, job._id, true)}
                         </span>
                       </div>
 
@@ -176,7 +193,7 @@ function JobDetails() {
               </div>
 
               {/* Description Card */}
-              <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xs">
+              <div className="glass-panel rounded-3xl p-6 sm:p-8">
                 <h2 className="text-lg font-extrabold text-slate-900">
                   About the Role
                 </h2>
@@ -187,7 +204,7 @@ function JobDetails() {
 
               {/* Requirements Card */}
               {job.requirements && job.requirements.length > 0 && (
-                <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xs">
+                <div className="glass-panel rounded-3xl p-6 sm:p-8">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-extrabold text-slate-900">
                       Required Skills & Qualifications
@@ -205,7 +222,7 @@ function JobDetails() {
                       return (
                         <div
                           key={i}
-                          className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold ${
+                          className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
                             isMatch
                               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                               : "border-slate-200 bg-slate-50 text-slate-700"
@@ -226,7 +243,7 @@ function JobDetails() {
 
               {/* Benefits Card */}
               {job.benefits && job.benefits.length > 0 && (
-                <div className="rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xs">
+                <div className="glass-panel rounded-3xl p-6 sm:p-8">
                   <h2 className="text-lg font-extrabold text-slate-900">
                     Compensation & Benefits
                   </h2>
@@ -249,7 +266,7 @@ function JobDetails() {
             {/* Right Sidebar */}
             <div className="space-y-6">
               {/* Apply Action Card */}
-              <div className="sticky top-24 rounded-3xl border border-slate-200/90 bg-white p-6 shadow-lg shadow-slate-900/5">
+              <div className="glass-panel sticky top-24 rounded-3xl p-6">
                 <h2 className="text-lg font-extrabold text-slate-900">
                   Apply for this position
                 </h2>
@@ -292,7 +309,7 @@ function JobDetails() {
                 ) : (
                   <Link
                     to={`/apply/${job._id}`}
-                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-center text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700"
+                    className="btn-premium mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-center text-xs font-bold text-white"
                   >
                     <span>Apply Now</span>
                     <ArrowRight className="h-4 w-4" />
@@ -301,6 +318,18 @@ function JobDetails() {
 
                 {/* Job Overview List */}
                 <div className="mt-6 border-t border-slate-100 pt-5 space-y-3.5 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Posted</span>
+                    <span
+                      title={
+                        getJobTimestamp(job.createdAt, job._id)?.toLocaleString() ||
+                        ""
+                      }
+                      className="font-bold text-indigo-600"
+                    >
+                      {formatJobAge(job.createdAt, job._id)}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">Location</span>
                     <span className="font-bold text-slate-900">{job.location}</span>
@@ -335,7 +364,7 @@ function JobDetails() {
 
               {/* Company Info Card */}
               {company && (
-                <div className="rounded-3xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+                <div className="glass-panel rounded-3xl p-6">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                       <Building2 className="h-5 w-5" />
@@ -370,7 +399,7 @@ function JobDetails() {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         )}
       </main>
     </div>
