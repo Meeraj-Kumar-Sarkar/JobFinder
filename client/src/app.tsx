@@ -1,6 +1,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -18,7 +19,6 @@ import Notifications from "./pages/Notifications";
 
 function App() {
   return (
-<<<<<<< HEAD
     <ThemeProvider>
       <AuthProvider>
         <Toaster
@@ -35,91 +35,72 @@ function App() {
             },
           }}
         />
+
         <BrowserRouter>
           <Routes>
-=======
-    <AuthProvider>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            borderRadius: "14px",
-            background: "#0f172a",
-            color: "#fff",
-            fontSize: "13px",
-            fontWeight: 500,
-            padding: "12px 16px",
-          },
-        }}
-      />
+            {/* Public Pages */}
+            <Route path="/" element={<Home />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/jobs/:id" element={<JobDetails />} />
 
-      <BrowserRouter>
-        <Routes>
->>>>>>> bafc19a (Added my project)
-          {/* Public Pages */}
-          <Route path="/" element={<Home />} />
-          <Route path="/jobs" element={<Jobs />} />
-          <Route path="/jobs/:id" element={<JobDetails />} />
+            <Route
+              path="/job-details"
+              element={<Navigate to="/jobs" replace />}
+            />
 
-          <Route
-            path="/job-details"
-            element={<Navigate to="/jobs" replace />}
-          />
+            <Route path="/job-details/:id" element={<JobDetails />} />
 
-          <Route path="/job-details/:id" element={<JobDetails />} />
+            <Route path="/apply" element={<Apply />} />
+            <Route path="/apply/:id" element={<Apply />} />
 
-          <Route path="/apply" element={<Apply />} />
-          <Route path="/apply/:id" element={<Apply />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
 
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+            {/* Forgot Password */}
+            <Route
+              path="/forgot-password"
+              element={<ForgotPassword />}
+            />
 
-          {/* Forgot Password */}
-          <Route
-            path="/forgot-password"
-            element={<ForgotPassword />}
-          />
+            {/* Protected Notifications */}
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Protected Notifications */}
-          <Route
-            path="/notifications"
-            element={
-              <ProtectedRoute>
-                <Notifications />
-              </ProtectedRoute>
-            }
-          />
+            {/* Candidate Dashboard */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Candidate Dashboard */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute allowedRole="candidate">
-                <CandidateDashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Employer Dashboard */}
+            <Route
+              path="/employer/dashboard"
+              element={
+                <ProtectedRoute allowedRole="employer">
+                  <EmployerDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Employer Dashboard */}
-          <Route
-            path="/employer/dashboard"
-            element={
-              <ProtectedRoute allowedRole="employer">
-                <EmployerDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Fallback */}
-          <Route
-            path="*"
-            element={<Navigate to="/" replace />}
-          />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  </ThemeProvider>
+            {/* Fallback */}
+            <Route
+              path="*"
+              element={<Navigate to="/" replace />}
+            />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

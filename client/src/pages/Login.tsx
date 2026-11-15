@@ -1,9 +1,7 @@
 
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   Briefcase,
@@ -15,8 +13,6 @@ import {
   AlertCircle,
   Lock,
   Mail,
-  Sun,
-  Moon,
 } from "lucide-react";
 
 function Login() {
@@ -28,7 +24,6 @@ function Login() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const { login, loginWithGoogle } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectParam = searchParams.get("redirect");
@@ -106,33 +101,9 @@ function Login() {
     : "/signup";
 
   return (
-<<<<<<< HEAD
-    <div className="relative flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-10 sm:px-6">
-      {/* Floating Theme Toggle */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-        className="glass-panel fixed right-5 top-5 z-50 flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:text-indigo-600 transition"
-      >
-        {isDark ? (
-          <Sun className="h-4 w-4 text-amber-400" />
-        ) : (
-          <Moon className="h-4 w-4" />
-        )}
-      </button>
-
-      <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-panel grid w-full max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-2"
-      >
-=======
     <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-10 sm:px-6">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xl lg:grid-cols-2">
 
->>>>>>> bafc19a (Added my project)
         {/* Left Side */}
         <div className="relative hidden overflow-hidden bg-slate-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
 
@@ -342,19 +313,20 @@ function Login() {
             </div>
 
             {/* Forgot Password - NEW */}
-       <div className="flex justify-start -mt-2">
-  <Link
-    to="/forgot-password"
-    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
-  >
-    Forgot Password?
-  </Link>
-</div>
+            <div className="flex justify-end -mt-2">
+              <Link
+                to="/forgot-password"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+
             {/* Sign In Button */}
             <button
               type="submit"
               disabled={submitting || googleLoading}
-              className="btn-premium mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-700 disabled:opacity-50"
             >
               {submitting ? "Signing In..." : "Sign In"}
               <ArrowRight className="h-4 w-4" />
@@ -375,7 +347,7 @@ function Login() {
           </p>
 
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
