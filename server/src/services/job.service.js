@@ -4,6 +4,7 @@ import Company from "../models/Company.js";
 import User from "../models/User.js";
 import { ServiceError } from "./application.service.js";
 import { escapeRegex } from "../middleware/security.middleware.js";
+import { call_Genai } from "../ai_models/genai_model.js";
 
 export class JobService {
   /**
@@ -286,6 +287,110 @@ export class JobService {
     await job.save();
     return job;
   }
+
+  //Adding Job Recommendation Algorith
+  async jobRecommendation_service(candidate_id){
+
+    try{
+        const candidate=await User.findById(candidate_id)
+        if (!candidate) {
+            throw new Error("User profile not found");
+        }
+        const skills=candidate.skills,preference=candidate.preferredJobType,experience=candidate.experience
+        const all_jobs=await Job.find({}).lean()
+        const jq= new JobQueue()
+        const recommended_jobs=[]
+        for (const job of all_jobs){
+            const manual_skill_score=job.requirements.length?
+                                job.requirements.filter(item=>skills.includes(item)).length/job.requirements.length*100:0
+            let skill_score=0
+            if(job.requirements.length>0){
+                const ai_response=await call_Genai(`
+                    You are an expert Applicant Tracking System (ATS) and Job-Skill Importance Evaluator.
+
+                      Your task is to evaluate the importance of each skill required for a particular job and calculate a weighted skill-matching score.
+
+                      INPUT:
+                      - Required Skills: ${JSON.stringify(job.requirements)}
+                      - Candidate Skills: ${JSON.stringify(skills)}
+
+                      INSTRUCTIONS:
+
+                      1. Identify all unique required skills.
+
+                      2. Assign an importance weight to each required skill based on its relevance to the job:
+                        - Critical / Mandatory: Weight 3
+                        - Important: Weight 2
+                        - Optional / Additional: Weight 1
+
+                      3. Determine whether the candidate possesses each required skill.
+                        - Recognize equivalent technologies, abbreviations, and synonyms.
+                        - Example: JS = JavaScript, Node = Node.js, Mongo = MongoDB.
+                        - Do not treat related but different technologies as equivalent.
+                        - Never assume the candidate possesses a skill without evidence.
+
+                      4. Calculate the weighted skill matching percentage:
+
+                        Weighted Score = (Sum of weights of matched skills / Sum of weights of all required skills) * 100
+
+                      5. Ensure:
+                        - Every required skill is counted only once.
+                        - Missing skills contribute zero to the numerator.
+                        - Extra candidate skills do not increase the score.
+                        - Importance weights must reflect the actual job requirements.
+
+                      OUTPUT RULES:
+                      - Return ONLY one integer between 0 and 100.
+                      - Do not return explanations, JSON, labels, or additional text.
+                      - If required skills are invalid or empty, return 0.
+                `)
+                const ai_skill_score = Number(
+                        String(ai_response).trim()
+                    );
+                    console.log(`${job.title}:`,ai_skill_score)
+                if (
+                    Number.isFinite(ai_skill_score) &&
+                    ai_skill_score >= 0 &&
+                    ai_skill_score <= 100
+                ) {
+                    skill_score = Math.max(manual_skill_score, ai_skill_score);
+                } else {
+                    skill_score = manual_skill_score;
+                }
+            }
+            else{
+                skill_score=0
+            }
+            const preference_score=(preference.toLowerCase()==job.jobType.toLowerCase())?1:0
+            const experience_score=(experience>=job.experience)?1:0
+            const score =(skill_score*0.5+preference_score*100*0.2+experience_score*100*0.3)
+            jq.enqueue({details:job,score:score})
+        }
+
+        while(recommended_jobs.length < 10 && jq.jobs.length>0){
+            const job=jq.dequeue()
+            recommended_jobs.push(job)
+        }
+
+        return recommended_jobs
+    }
+    catch(err){
+        console.log("Error",err)
+    }
+}
+}
+
+class JobQueue {
+    constructor(){
+        this.jobs=[]
+    }
+    enqueue(job){
+        this.jobs.push(job)
+        this.jobs.sort((a,b)=>b.score-a.score)
+    }
+    dequeue(){
+        return this.jobs.shift()
+    }
 }
 
 export const jobService = new JobService();

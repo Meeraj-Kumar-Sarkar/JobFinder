@@ -86,6 +86,20 @@ export class JobController {
       return handleJobError(res, error, "Failed to update job");
     }
   }
+
+  //job recommendation controller
+  async recommendJob(req,res) {
+    try{
+      const {candidate_id}=req.body
+      const recommended_jobs=await jobService.jobRecommendation_service(skills,preference,experience)
+      return res
+                .status(200)
+                .json({message:"Here are you Job reccomendations:",recommended_jobs:recommended_jobs})
+    }
+    catch(error){
+      return handleJobError(res,error,"Failed to reccomend job")
+    }
+  }
 }
 
 export const jobController = new JobController();
