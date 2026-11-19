@@ -1,14 +1,8 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { env } from "../config/env.js";
 
-// Create Gmail SMTP transporter
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: env.EMAIL_USER,
-    pass: env.EMAIL_PASS,
-  },
-});
+// Initialize Resend
+const resend = new Resend(env.RESEND_API_KEY);
 
 // Escape dynamic values before inserting them into HTML
 const escapeHtml = (value = "") =>
@@ -31,8 +25,12 @@ export const sendInterviewProgressEmail = async ({
   previousStage,
   nextStage,
 }) => {
-  if (!env.EMAIL_USER || !env.EMAIL_PASS) {
-    throw new Error("Email credentials are not configured");
+  if (!env.RESEND_API_KEY) {
+    throw new Error("Resend API key is not configured");
+  }
+
+  if (!env.RESEND_FROM_EMAIL) {
+    throw new Error("Resend sender email is not configured");
   }
 
   if (!candidateEmail || !previousStage || !nextStage) {
@@ -44,9 +42,9 @@ export const sendInterviewProgressEmail = async ({
   const safePreviousStage = escapeHtml(previousStage);
   const safeNextStage = escapeHtml(nextStage);
 
-  const mailOptions = {
-    from: `"JobFinder Recruitment" <${env.EMAIL_USER}>`,
-    to: candidateEmail,
+  const { data, error } = await resend.emails.send({
+    from: `JobFinder Recruitment <${env.RESEND_FROM_EMAIL}>`,
+    to: [candidateEmail],
 
     subject: `Congratulations! You've progressed to the ${nextStage} Round`,
 
@@ -126,11 +124,14 @@ JobFinder Recruitment Team
 
       </div>
     `,
-  };
+  });
 
-  const result = await transporter.sendMail(mailOptions);
+  if (error) {
+    console.error("Resend email error:", error);
+    throw new Error(`Failed to send interview email: ${error.message}`);
+  }
 
-  console.log("Interview progression email sent:", result.messageId);
+  console.log("Interview progression email sent:", data.id);
 
-  return result;
+  return data;
 };
