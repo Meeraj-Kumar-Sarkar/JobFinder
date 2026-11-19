@@ -7,6 +7,7 @@ import Notification from "../models/Notification.js";
 import { APPLICATION_STATUSES } from "../utils/constants.js";
 import { sanitizeUrl } from "../middleware/security.middleware.js";
 import { call_Genai } from "../ai_models/genai_model.js";
+import { sendInterviewProgressEmail } from "./email.service.js";
 
 export class ServiceError extends Error {
   constructor(statusCode, message) {
@@ -395,6 +396,8 @@ export class ApplicationService {
       throw new ServiceError(404, "Application not found");
     }
 
+    const previousStatus = application.status;
+
     let nextStatus;
 
     if (targetStatus) {
@@ -443,6 +446,32 @@ export class ApplicationService {
     }
 
     await application.save();
+
+    // Send progression email when candidate moves to another stage
+if (
+  previousStatus !== nextStatus &&
+  nextStatus !== "Rejected" &&
+  previousStatus !== "Rejected"
+) {
+  try {
+    const [candidate, job] = await Promise.all([
+      User.findById(application.candidate).select("name email"),
+      Job.findById(application.job).select("title"),
+    ]);
+
+    if (candidate?.email) {
+      await sendInterviewProgressEmail({
+        candidateName: candidate.name,
+        candidateEmail: candidate.email,
+        jobTitle: job?.title || "the position",
+        previousStage: previousStatus,
+        nextStage: nextStatus,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send interview progression email:", err);
+  }
+}
 
     // Notify candidate
     try {
