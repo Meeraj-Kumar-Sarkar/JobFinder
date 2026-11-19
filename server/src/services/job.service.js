@@ -288,30 +288,87 @@ export class JobService {
     return job;
   }
 
-  //Adding Job Recommendation Algorith
-  async jobRecommendation_service(candidate_id){
+  //Adding Job Recommendation Algorithm
+  async jobRecommendation_service(candidate_id, filter = {}) {
+    if (!candidate_id || !isValidObjectId(candidate_id)) {
+      throw new ServiceError(400, "Valid candidate ID is required");
+    }
 
-    try{
-        const candidate=await User.findById(candidate_id)
-        if (!candidate) {
-            throw new Error("User profile not found");
-        }
-        const skills=candidate.skills,preference=candidate.preferredJobType,experience=candidate.experience
-        const all_jobs=await Job.find({}).lean()
-        const jq= new JobQueue()
-        const recommended_jobs=[]
-        for (const job of all_jobs){
-            const manual_skill_score=job.requirements.length?
-                                job.requirements.filter(item=>skills.includes(item)).length/job.requirements.length*100:0
-            let skill_score=0
-            if(job.requirements.length>0){
-                const ai_response=await call_Genai(`
+    const candidate = await User.findById(candidate_id).lean();
+    if (!candidate) {
+      throw new ServiceError(404, "User profile not found");
+    }
+
+    const skills = Array.isArray(candidate.skills) ? candidate.skills : [];
+    const normalizedCandidateSkills = skills.map((s) =>
+      String(s).toLowerCase().trim(),
+    );
+    const preference = String(candidate.preferredJobType || "Full Time");
+    const experience = Number(candidate.experience) || 0;
+
+    // Build query for active jobs (plus optional search/category/location/jobType filters)
+    const query = { status: "active" };
+
+    if (filter.category && filter.category !== "All") {
+      query.category = filter.category;
+    }
+
+    if (
+      filter.location &&
+      typeof filter.location === "string" &&
+      filter.location.trim()
+    ) {
+      query.location = {
+        $regex: escapeRegex(filter.location.trim()),
+        $options: "i",
+      };
+    }
+
+    if (filter.jobType && filter.jobType !== "All") {
+      query.jobType = filter.jobType;
+    }
+
+    if (
+      filter.search &&
+      typeof filter.search === "string" &&
+      filter.search.trim()
+    ) {
+      const term = escapeRegex(filter.search.trim());
+      query.$or = [
+        { title: { $regex: term, $options: "i" } },
+        { description: { $regex: term, $options: "i" } },
+      ];
+    }
+
+    const all_jobs = await Job.find(query)
+      .populate("company", "name logo industry location")
+      .populate("assignedRecruiters", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const jq = new JobQueue();
+    const recommended_jobs = [];
+
+    const scoredJobs = await Promise.all(
+      all_jobs.map(async (job) => {
+        const jobReqs = Array.isArray(job.requirements) ? job.requirements : [];
+        const matchedCount = jobReqs.filter((item) =>
+          normalizedCandidateSkills.includes(String(item).toLowerCase().trim()),
+        ).length;
+
+        const manual_skill_score =
+          jobReqs.length > 0 ? (matchedCount / jobReqs.length) * 100 : 0;
+
+        let skill_score = manual_skill_score;
+
+        if (jobReqs.length > 0 && skills.length > 0) {
+          const ai_response = await call_Genai(`
                     You are an expert Applicant Tracking System (ATS) and Job-Skill Importance Evaluator.
 
                       Your task is to evaluate the importance of each skill required for a particular job and calculate a weighted skill-matching score.
 
                       INPUT:
-                      - Required Skills: ${JSON.stringify(job.requirements)}
+                      - Required Skills: ${JSON.stringify(jobReqs)}
                       - Candidate Skills: ${JSON.stringify(skills)}
 
                       INSTRUCTIONS:
@@ -343,41 +400,55 @@ export class JobService {
                       - Return ONLY one integer between 0 and 100.
                       - Do not return explanations, JSON, labels, or additional text.
                       - If required skills are invalid or empty, return 0.
-                `)
-                const ai_skill_score = Number(
-                        String(ai_response).trim()
-                    );
-                    console.log(`${job.title}:`,ai_skill_score)
-                if (
-                    Number.isFinite(ai_skill_score) &&
-                    ai_skill_score >= 0 &&
-                    ai_skill_score <= 100
-                ) {
-                    skill_score = Math.max(manual_skill_score, ai_skill_score);
-                } else {
-                    skill_score = manual_skill_score;
-                }
+                `);
+
+          if (ai_response !== null && ai_response !== undefined) {
+            const ai_skill_score = Number(String(ai_response).trim());
+            if (
+              Number.isFinite(ai_skill_score) &&
+              ai_skill_score >= 0 &&
+              ai_skill_score <= 100
+            ) {
+              skill_score = Math.max(manual_skill_score, ai_skill_score);
             }
-            else{
-                skill_score=0
-            }
-            const preference_score=(preference.toLowerCase()==job.jobType.toLowerCase())?1:0
-            const experience_score=(experience>=job.experience)?1:0
-            const score =(skill_score*0.5+preference_score*100*0.2+experience_score*100*0.3)
-            jq.enqueue({details:job,score:score})
+          }
         }
 
-        while(recommended_jobs.length < 10 && jq.jobs.length>0){
-            const job=jq.dequeue()
-            recommended_jobs.push(job)
-        }
+        const preference_score =
+          preference.toLowerCase() === String(job.jobType || "").toLowerCase()
+            ? 1
+            : 0;
+        const experience_score =
+          experience >= (Number(job.experience) || 0) ? 1 : 0;
+        const score = Math.round(
+          skill_score * 0.5 +
+            preference_score * 100 * 0.2 +
+            experience_score * 100 * 0.3,
+        );
 
-        return recommended_jobs
+        return {
+          details: {
+            ...job,
+            recommendationScore: score,
+            skillMatchScore: Math.round(skill_score),
+          },
+          score,
+        };
+      }),
+    );
+
+    for (const item of scoredJobs) {
+      jq.enqueue(item);
     }
-    catch(err){
-        console.log("Error",err)
+
+    const maxResults = Math.max(1, Math.min(100, Number(filter.limit) || 10));
+    while (recommended_jobs.length < maxResults && jq.jobs.length > 0) {
+      const job = jq.dequeue();
+      recommended_jobs.push(job);
     }
-}
+
+    return recommended_jobs;
+  }
 }
 
 class JobQueue {

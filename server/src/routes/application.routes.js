@@ -61,6 +61,16 @@ router.post("/schedule-interview", (req, res) =>
   applicationController.scheduleInterview(req, res),
 );
 
+// Employer: Configure (Add / Remove) Live AI Q&A Interview
+router.post("/:id/ai-interview/configure", (req, res) =>
+  applicationController.configureAiInterview(req, res),
+);
+
+// Candidate: Submit answers for Live AI Q&A Interview & generate AI evaluation report
+router.post("/:id/ai-interview/submit", (req, res) =>
+  applicationController.submitAiInterview(req, res),
+);
+
 // Employer: Final hiring decision (Hired / Rejected)
 router.post("/:id/decision", (req, res) =>
   applicationController.hiringDecision(req, res),

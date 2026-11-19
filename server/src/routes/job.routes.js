@@ -8,7 +8,15 @@ const router = Router();
 router.post("/", optionalAuth, (req, res) => jobController.createJob(req, res));
 
 // List / search jobs
-router.get("/", (req, res) => jobController.getJobs(req, res));
+router.get("/", optionalAuth, (req, res) => jobController.getJobs(req, res));
+
+// Personalized AI Job Recommendations (for signed-in users)
+router.get("/recommend", optionalAuth, (req, res) =>
+  jobController.recommendJob(req, res),
+);
+router.post("/recommend", optionalAuth, (req, res) =>
+  jobController.recommendJob(req, res),
+);
 
 // Get jobs assigned to the authenticated HR / worker
 router.get("/assigned", authenticate, (req, res) =>

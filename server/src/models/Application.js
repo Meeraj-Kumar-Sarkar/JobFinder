@@ -25,6 +25,59 @@ const ApplicationSchema = new Schema(
 
     interviewDate: Date,
 
+    aiInterview: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      status: {
+        type: String,
+        enum: ["not_configured", "scheduled", "in_progress", "completed"],
+        default: "not_configured",
+      },
+      scheduledDate: Date,
+      questionCount: {
+        type: Number,
+        default: 5,
+      },
+      topicFocus: {
+        type: String,
+        default: "",
+      },
+      joinLink: {
+        type: String,
+        default: "",
+      },
+      questions: [
+        {
+          questionNumber: Number,
+          question: String,
+          topic: String,
+          expectedKeyPoints: [String],
+          candidateAnswer: {
+            type: String,
+            default: "",
+          },
+          score: {
+            type: Number,
+            default: 0,
+          },
+          aiFeedback: {
+            type: String,
+            default: "",
+          },
+        },
+      ],
+      report: {
+        overallScore: Number,
+        verdict: String,
+        summary: String,
+        strengths: [String],
+        improvements: [String],
+        completedAt: Date,
+      },
+    },
+
     status: {
       type: String,
       enum: [

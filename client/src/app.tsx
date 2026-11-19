@@ -16,6 +16,7 @@ import ForgotPassword from "./pages/ForgetPassword";
 import CandidateDashboard from "./pages/CandidateDashboard";
 import EmployerDashboard from "./pages/EmployerDashboard";
 import Notifications from "./pages/Notifications";
+import LiveAiInterview from "./pages/LiveAiInterview";
 
 function App() {
   return (
@@ -68,6 +69,16 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Notifications />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Live AI Q&A Interview Room */}
+            <Route
+              path="/interview/:applicationId"
+              element={
+                <ProtectedRoute>
+                  <LiveAiInterview />
                 </ProtectedRoute>
               }
             />

@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Zap,
   Clock,
+  Sparkles,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { jobsApi, formatJobAge, getJobTimestamp, type Job } from "../services/api";
@@ -25,7 +26,7 @@ import { useAuth } from "../context/AuthContext";
 
 function Jobs() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [location, setLocation] = useState(searchParams.get("location") || "");
@@ -39,17 +40,37 @@ function Jobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const isRecommendationActive =
+    isAuthenticated &&
+    Boolean(user?._id) &&
+    (sort === "default" || sort === "recommended");
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await jobsApi.getAll({
+      const filterParams = {
         search: search.trim() || undefined,
         location: location.trim() || undefined,
         category: category !== "All" ? category : undefined,
         jobType: jobType !== "All" ? jobType : undefined,
-        sort: sort !== "default" ? sort : undefined,
-      });
+      };
+
+      // Signed-in users get the new AI + JobQueue recommendation algorithm by default;
+      // users who are not signed in (or who choose an explicit standard sort) use the previous normal flow.
+      const res =
+        isAuthenticated &&
+        user?._id &&
+        (sort === "default" || sort === "recommended")
+          ? await jobsApi.getRecommended(
+              user._id,
+              { ...filterParams, limit: 20 },
+              user,
+            )
+          : await jobsApi.getAll({
+              ...filterParams,
+              sort: sort !== "default" ? sort : undefined,
+            });
 
       if (res?.data?.jobs) {
         setJobs(res.data.jobs);
@@ -64,7 +85,7 @@ function Jobs() {
     } finally {
       setLoading(false);
     }
-  }, [search, location, category, jobType, sort]);
+  }, [search, location, category, jobType, sort, isAuthenticated, user]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -254,9 +275,22 @@ function Jobs() {
                 onChange={(e) => setSort(e.target.value)}
                 className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
               >
-                <option value="default">Newest First</option>
-                <option value="salary">Highest Compensation</option>
-                <option value="title">Alphabetical (A–Z)</option>
+                {isAuthenticated ? (
+                  <>
+                    <option value="default">
+                      Recommended For You (AI Match)
+                    </option>
+                    <option value="newest">Newest First</option>
+                    <option value="salary">Highest Compensation</option>
+                    <option value="title">Alphabetical (A–Z)</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="default">Newest First</option>
+                    <option value="salary">Highest Compensation</option>
+                    <option value="title">Alphabetical (A–Z)</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -277,6 +311,26 @@ function Jobs() {
             </div>
           </div>
         </motion.div>
+
+        {isRecommendationActive && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200/80 bg-indigo-50/70 px-4 py-3 text-xs">
+            <div className="flex items-center gap-2 font-bold text-indigo-800">
+              <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
+              <span>
+                AI Recommendation Algorithm Active — roles are ranked for{" "}
+                {user?.name || "your profile"} using Weighted Skill Match (50%),
+                Experience (30%), and Job-Type Preference (20%).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSort("newest")}
+              className="font-bold text-indigo-600 hover:underline shrink-0"
+            >
+              Switch to Standard Chronological View →
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 flex items-center justify-between">
@@ -341,9 +395,18 @@ function Jobs() {
                         </div>
 
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                            {job.jobType}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isRecommendationActive &&
+                              job.recommendationScore !== undefined && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[11px] font-extrabold text-indigo-700">
+                                  <Sparkles className="h-3 w-3 text-indigo-600" />
+                                  {job.recommendationScore}% Match
+                                </span>
+                              )}
+                            <span className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              {job.jobType}
+                            </span>
+                          </div>
                           <span
                             title={
                               getJobTimestamp(job.createdAt, job._id)?.toLocaleString() ||

@@ -3,7 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
-import { applicationsApi, usersApi, type Application } from "../services/api";
+import {
+  applicationsApi,
+  usersApi,
+  jobsApi,
+  formatJobAge,
+  type Application,
+  type Job,
+} from "../services/api";
 import { fetchUnifiedNotifications } from "../utils/notifications";
 import toast from "react-hot-toast";
 import {
@@ -34,8 +41,11 @@ function CandidateDashboard() {
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<"applications" | "profile">("applications");
+  const [activeTab, setActiveTab] = useState<
+    "applications" | "recommended" | "profile"
+  >("applications");
   const [applications, setApplications] = useState<Application[]>([]);
+  const [recommendedJobs, setRecommendedJobs] = useState<Job[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +56,9 @@ function CandidateDashboard() {
   const [bio, setBio] = useState(user?.bio || "");
   const [skills, setSkills] = useState(user?.skills ? user.skills.join(", ") : "");
   const [experience, setExperience] = useState<number>(user?.experience || 0);
+  const [preferredJobType, setPreferredJobType] = useState<string>(
+    user?.preferredJobType || "Full Time",
+  );
   const [resumeURL, setResumeURL] = useState(user?.resumeURL || "");
   const [portfolioURL, setPortfolioURL] = useState(user?.portfolioURL || "");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -58,6 +71,7 @@ function CandidateDashboard() {
       setBio(user.bio || "");
       setSkills(user.skills ? user.skills.join(", ") : "");
       setExperience(user.experience || 0);
+      setPreferredJobType(user.preferredJobType || "Full Time");
       setResumeURL(user.resumeURL || "");
       setPortfolioURL(user.portfolioURL || "");
     }
@@ -66,13 +80,17 @@ function CandidateDashboard() {
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      const [res, notifResult] = await Promise.all([
+      const [res, notifResult, recRes] = await Promise.all([
         applicationsApi.getMyApplications(),
         fetchUnifiedNotifications(user),
+        user?._id
+          ? jobsApi.getRecommended(user._id, { limit: 10 }, user)
+          : Promise.resolve({ data: { jobs: [] } }),
       ]);
       const list = res?.data?.applications || res?.data || [];
       setApplications(list);
       setUnreadCount(notifResult.unreadCount);
+      setRecommendedJobs(recRes?.data?.jobs || []);
     } catch (err) {
       console.error("Error loading candidate applications:", err);
     } finally {
@@ -116,13 +134,15 @@ function CandidateDashboard() {
         bio: bio.trim(),
         skills: parsedSkills,
         experience: Number(experience),
+        preferredJobType,
         resumeURL: resumeURL.trim(),
         portfolioURL: portfolioURL.trim(),
       });
 
       const updated = res.data?.user || res.data;
       updateUser(updated);
-      toast.success("Profile updated successfully!");
+      toast.success("Profile & AI recommendation preferences updated!");
+      fetchApplications();
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to update profile.";
       toast.error(msg);
@@ -204,6 +224,23 @@ function CandidateDashboard() {
                 </span>
                 <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">
                   {applications.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("recommended")}
+                className={`w-full text-left px-3.5 py-2.5 rounded-xl font-semibold text-sm transition flex items-center justify-between ${
+                  activeTab === "recommended"
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Sparkles className="h-4 w-4 text-indigo-600" />
+                  AI Recommended
+                </span>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                  {recommendedJobs.length}
                 </span>
               </button>
 
@@ -510,22 +547,60 @@ function CandidateDashboard() {
                         )}
 
                         {/* Interview & Employer Message Callouts */}
-                        {(app.interviewDate || app.feedback) && (
+                        {(app.interviewDate || app.feedback || app.aiInterview?.enabled) && (
                           <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                             {app.interviewDate && (
-                              <div className="flex items-start gap-2.5 rounded-xl border border-purple-200/80 bg-purple-50/60 p-3">
-                                <Calendar className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                              <div className="flex items-start justify-between gap-2.5 rounded-xl border border-purple-200/80 bg-purple-50/60 p-3">
+                                <div className="flex items-start gap-2.5">
+                                  <Calendar className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                                  <div className="text-xs">
+                                    <p className="font-bold text-purple-950">
+                                      Scheduled Interview
+                                    </p>
+                                    <p className="text-purple-800 mt-0.5 font-medium">
+                                      {new Date(app.interviewDate).toLocaleString(undefined, {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      })}
+                                    </p>
+                                  </div>
+                                </div>
+                                {(app.aiInterview?.enabled ||
+                                  app.feedback?.includes("/interview/")) && (
+                                  <Link
+                                    to={`/interview/${app._id}`}
+                                    className="btn-premium shrink-0 inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white"
+                                  >
+                                    <Sparkles className="h-3 w-3" />
+                                    {app.aiInterview?.status === "completed"
+                                      ? "View AI Results"
+                                      : "Join AI Interview →"}
+                                  </Link>
+                                )}
+                              </div>
+                            )}
+
+                            {app.aiInterview?.enabled && !app.interviewDate && (
+                              <div className="flex items-center justify-between gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50/70 p-3">
                                 <div className="text-xs">
-                                  <p className="font-bold text-purple-950">
-                                    Scheduled Interview
+                                  <p className="font-bold text-indigo-950">
+                                    Live AI Q&A Interview ({app.aiInterview.questionCount} Questions)
                                   </p>
-                                  <p className="text-purple-800 mt-0.5 font-medium">
-                                    {new Date(app.interviewDate).toLocaleString(undefined, {
-                                      dateStyle: "medium",
-                                      timeStyle: "short",
-                                    })}
+                                  <p className="text-indigo-800 mt-0.5">
+                                    {app.aiInterview.status === "completed"
+                                      ? `Completed • Score: ${app.aiInterview.report?.overallScore ?? 0}/100`
+                                      : "Ready to join"}
                                   </p>
                                 </div>
+                                <Link
+                                  to={`/interview/${app._id}`}
+                                  className="btn-premium shrink-0 inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white"
+                                >
+                                  <Sparkles className="h-3 w-3" />
+                                  {app.aiInterview.status === "completed"
+                                    ? "View Summary"
+                                    : "Join AI Interview →"}
+                                </Link>
                               </div>
                             )}
 
@@ -560,7 +635,118 @@ function CandidateDashboard() {
             </motion.div>
           )}
 
-          {/* TAB 2: CANDIDATE PROFILE */}
+          {/* TAB 2: AI RECOMMENDED JOBS (Only for Signed-in Candidate) */}
+          {activeTab === "recommended" && (
+            <motion.div
+              key="recommended"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35 }}
+              className="glass-panel rounded-3xl p-6 sm:p-8"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-indigo-600" />
+                    <h2 className="text-lg font-bold text-slate-900">
+                      AI Recommended Jobs For You
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ranked by the JobQueue Recommendation Algorithm: Weighted AI Skill Importance (50%), Experience Match (30%), and Job-Type Preference (20%).
+                  </p>
+                </div>
+
+                <button
+                  onClick={fetchApplications}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Recalculate Matches
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="py-16 text-center text-slate-500">
+                  <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                  <p className="mt-3 text-sm font-medium">
+                    Evaluating your profile against open roles...
+                  </p>
+                </div>
+              ) : recommendedJobs.length === 0 ? (
+                <div className="py-14 text-center">
+                  <p className="text-sm font-bold text-slate-900">
+                    No active jobs found to recommend yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {recommendedJobs.map((job) => {
+                    const compName =
+                      typeof job.company === "object" && job.company !== null
+                        ? job.company.name
+                        : "Hiring Company";
+                    return (
+                      <Link
+                        key={job._id}
+                        to={`/jobs/${job._id}`}
+                        className="glass-card flex flex-col justify-between rounded-2xl p-5"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-bold text-slate-900 text-base">
+                                {job.title}
+                              </h3>
+                              <p className="text-xs font-semibold text-indigo-600 mt-0.5">
+                                {compName} • {job.location}
+                              </p>
+                            </div>
+
+                            {job.recommendationScore !== undefined && (
+                              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-extrabold text-indigo-700">
+                                <Sparkles className="h-3 w-3 text-indigo-600" />
+                                {job.recommendationScore}% Match
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-3 text-xs text-slate-500 line-clamp-2">
+                            {job.description}
+                          </p>
+
+                          {job.requirements && job.requirements.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {job.requirements.slice(0, 4).map((req, i) => (
+                                <span
+                                  key={i}
+                                  className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                                >
+                                  {req}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <span className="text-slate-500 font-medium">
+                            {job.jobType} • {formatJobAge(job.createdAt, job._id, true)}
+                          </span>
+                          <span className="font-bold text-indigo-600 inline-flex items-center gap-1">
+                            View & Apply <ArrowUpRight className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* TAB 3: CANDIDATE PROFILE */}
           {activeTab === "profile" && (
             <motion.div
               key="profile"
@@ -639,7 +825,7 @@ function CandidateDashboard() {
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1.5">
                       <Award className="h-3.5 w-3.5 text-indigo-600" />
@@ -666,6 +852,22 @@ function CandidateDashboard() {
                       onChange={(e) => setExperience(Number(e.target.value))}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Preferred Job Type
+                    </label>
+                    <select
+                      value={preferredJobType}
+                      onChange={(e) => setPreferredJobType(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:bg-white transition"
+                    >
+                      <option value="Full Time">Full Time</option>
+                      <option value="Part Time">Part Time</option>
+                      <option value="Contract">Contract</option>
+                      <option value="Freelance">Freelance</option>
+                    </select>
                   </div>
                 </div>
 

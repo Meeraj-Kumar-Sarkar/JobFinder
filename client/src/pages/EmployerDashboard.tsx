@@ -155,13 +155,21 @@ function EmployerDashboard() {
   const [description, setDescription] = useState("");
   const [postingJob, setPostingJob] = useState(false);
 
-  // Interview Schedule Modal State
+  // Interview Schedule & Live AI Q&A Interview Configurator Modal State
   const [scheduleModalApp, setScheduleModalApp] = useState<Application | null>(
     null,
   );
   const [interviewDate, setInterviewDate] = useState("");
   const [interviewNote, setInterviewNote] = useState("");
+  const [enableAiInterview, setEnableAiInterview] = useState<boolean>(true);
+  const [aiQuestionCount, setAiQuestionCount] = useState<number>(5);
+  const [aiTopicFocus, setAiTopicFocus] = useState<string>("");
   const [scheduling, setScheduling] = useState(false);
+
+  // Stored AI Evaluation Report & Questions Viewer Modal State
+  const [aiReportModalApp, setAiReportModalApp] = useState<Application | null>(
+    null,
+  );
 
   // Direct Message Candidate Modal State
   const [messageModalApp, setMessageModalApp] = useState<Application | null>(
@@ -301,53 +309,85 @@ function EmployerDashboard() {
     }
   };
 
-  // Schedule Interview
+  // Schedule Interview (with optional Live AI Q&A Interview generation)
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleModalApp || !interviewDate) return;
 
     setScheduling(true);
-    try {
-      await applicationsApi.scheduleInterview(
-        scheduleModalApp._id,
-        interviewDate,
-        interviewNote.trim() || undefined,
-      );
+    const cand =
+      typeof scheduleModalApp.candidate === "object"
+        ? (scheduleModalApp.candidate as User)
+        : null;
+    const job =
+      typeof scheduleModalApp.job === "object"
+        ? (scheduleModalApp.job as Job)
+        : null;
 
-      // Also persist the note on feedback if provided so unified notifications pick it up immediately
-      if (interviewNote.trim()) {
-        try {
-          const cand =
-            typeof scheduleModalApp.candidate === "object"
-              ? (scheduleModalApp.candidate as User)
-              : null;
-          const job =
-            typeof scheduleModalApp.job === "object"
-              ? (scheduleModalApp.job as Job)
-              : null;
-          await notificationsApi.sendMessage({
-            applicationId: scheduleModalApp._id,
-            recipientId: cand?._id,
-            jobId: job?._id,
-            title: `Interview Invitation: ${job?.title || "Role"}`,
-            message: `Scheduled for ${new Date(interviewDate).toLocaleString()}. Details: ${interviewNote.trim()}`,
-          });
-        } catch {
-          // Fallback to status update feedback if /notifications/send is not yet deployed
-          await applicationsApi
-            .updateStatus(
-              scheduleModalApp._id,
-              scheduleModalApp.status,
-              interviewNote.trim(),
-            )
-            .catch(() => {});
-        }
+    try {
+      if (enableAiInterview) {
+        await applicationsApi.configureAiInterview(scheduleModalApp._id, {
+          enabled: true,
+          interviewDate,
+          questionCount: Number(aiQuestionCount) || 5,
+          topicFocus: aiTopicFocus.trim() || undefined,
+          feedback: interviewNote.trim() || undefined,
+          jobContext: job,
+        });
+      } else {
+        await applicationsApi.scheduleInterview(
+          scheduleModalApp._id,
+          interviewDate,
+          interviewNote.trim() || undefined,
+          {
+            enableAiInterview: false,
+            jobContext: job,
+          },
+        );
       }
 
-      toast.success("Interview scheduled & candidate notified!");
+      const joinLink = `/interview/${scheduleModalApp._id}`;
+      const notifyMsg = enableAiInterview
+        ? `Live AI Q&A Interview (${aiQuestionCount} questions${
+            aiTopicFocus.trim() ? ` on ${aiTopicFocus.trim()}` : ""
+          }) scheduled for ${new Date(
+            interviewDate,
+          ).toLocaleString()}. Join link: ${joinLink}${
+            interviewNote.trim() ? ` • Note: ${interviewNote.trim()}` : ""
+          }`
+        : `Scheduled for ${new Date(interviewDate).toLocaleString()}.${
+            interviewNote.trim() ? ` Details: ${interviewNote.trim()}` : ""
+          }`;
+
+      try {
+        await notificationsApi.sendMessage({
+          applicationId: scheduleModalApp._id,
+          recipientId: cand?._id,
+          jobId: job?._id,
+          title: enableAiInterview
+            ? `Live AI Q&A Interview Scheduled: ${job?.title || "Role"}`
+            : `Interview Invitation: ${job?.title || "Role"}`,
+          message: notifyMsg,
+        });
+      } catch {
+        await applicationsApi
+          .updateStatus(
+            scheduleModalApp._id,
+            scheduleModalApp.status,
+            notifyMsg,
+          )
+          .catch(() => {});
+      }
+
+      toast.success(
+        enableAiInterview
+          ? `Live AI Q&A Interview (${aiQuestionCount} questions) created & candidate notified with join link!`
+          : "Interview scheduled & candidate notified!",
+      );
       setScheduleModalApp(null);
       setInterviewDate("");
       setInterviewNote("");
+      setAiTopicFocus("");
       fetchData();
     } catch (err: any) {
       const msg =
@@ -355,6 +395,30 @@ function EmployerDashboard() {
       toast.error(msg);
     } finally {
       setScheduling(false);
+    }
+  };
+
+  // Remove Live AI Q&A Interview from an applicant's stage
+  const handleRemoveAiInterview = async (app: Application) => {
+    if (
+      !window.confirm(
+        "Remove the Live AI Q&A Interview from this applicant's stage?",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await applicationsApi.configureAiInterview(app._id, {
+        enabled: false,
+      });
+      toast.success("Live AI Q&A Interview removed from this stage.");
+      fetchData();
+      if (aiReportModalApp?._id === app._id) {
+        setAiReportModalApp(null);
+      }
+    } catch {
+      toast.error("Failed to remove AI interview.");
     }
   };
 
@@ -670,11 +734,14 @@ function EmployerDashboard() {
             onClick={() => {
               setScheduleModalApp(app);
               setInterviewNote(app.feedback || "");
+              setEnableAiInterview(app.aiInterview?.enabled ?? true);
+              setAiQuestionCount(app.aiInterview?.questionCount || 5);
+              setAiTopicFocus(app.aiInterview?.topicFocus || "");
             }}
             className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition"
           >
             <Calendar className="h-4 w-4" />
-            {app.interviewDate ? "Reschedule Interview" : "Schedule Interview"}
+            {app.interviewDate ? "Configure / Reschedule Interview" : "Schedule + AI Q&A Interview"}
           </button>
 
           {getSafeExternalUrl(app.resumeURL) ? (
@@ -693,6 +760,88 @@ function EmployerDashboard() {
               No Resume Attached
             </span>
           )}
+        </div>
+
+        {/* LIVE AI Q&A INTERVIEW & EVALUATION REPORT PANEL */}
+        <div className="mt-4 rounded-2xl border border-indigo-200/80 bg-indigo-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-xs">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-extrabold text-slate-900">
+                    Live AI Q&A Interview Stage Assessment
+                  </p>
+                  {app.aiInterview?.enabled ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                        app.aiInterview.status === "completed"
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                      }`}
+                    >
+                      {app.aiInterview.status === "completed"
+                        ? `Completed • ${app.aiInterview.report?.overallScore ?? 0}/100`
+                        : `Active • ${app.aiInterview.questionCount} AI Questions`}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                      Not Added
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {app.aiInterview?.enabled
+                    ? app.aiInterview.status === "completed"
+                      ? `Verdict: ${app.aiInterview.report?.verdict || "Evaluated"}`
+                      : `Join link sent to applicant: /interview/${app._id}`
+                    : "Optional: Add an AI-generated Q&A live interview tailored to this role's requirements."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {app.aiInterview?.enabled ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setAiReportModalApp(app)}
+                    className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-white"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {app.aiInterview.status === "completed"
+                      ? "Evaluate AI Report & Score"
+                      : "Preview AI Questions"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAiInterview(app)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                  >
+                    Remove AI Interview
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScheduleModalApp(app);
+                    setEnableAiInterview(true);
+                    setAiQuestionCount(5);
+                    setAiTopicFocus(
+                      (job?.requirements || []).slice(0, 3).join(", "),
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition shadow-2xs"
+                >
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  Add Live AI Q&A Interview
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Interview & Last Message Callouts */}
@@ -1435,18 +1584,41 @@ function EmployerDashboard() {
                                       </div>
                                     )}
 
-                                    {/* Scheduled Interview Pill */}
-                                    {app.interviewDate && (
-                                      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-[10px] font-bold text-purple-700">
-                                        <Calendar className="h-3 w-3 shrink-0" />
-                                        <span className="truncate">
-                                          {new Date(
-                                            app.interviewDate,
-                                          ).toLocaleDateString(undefined, {
-                                            month: "short",
-                                            day: "numeric",
-                                          })}
+                                    {/* Scheduled Interview & AI Q&A Status Pill */}
+                                    {(app.interviewDate || app.aiInterview?.enabled) && (
+                                      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-1.5 rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-[10px] font-bold text-purple-700">
+                                        <span className="flex items-center gap-1 truncate">
+                                          <Calendar className="h-3 w-3 shrink-0" />
+                                          {app.interviewDate
+                                            ? new Date(
+                                                app.interviewDate,
+                                              ).toLocaleDateString(undefined, {
+                                                month: "short",
+                                                day: "numeric",
+                                              })
+                                            : "AI Q&A"}
                                         </span>
+
+                                        {app.aiInterview?.enabled && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAiReportModalApp(app);
+                                            }}
+                                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-extrabold ${
+                                              app.aiInterview.status ===
+                                              "completed"
+                                                ? "bg-emerald-600 text-white"
+                                                : "bg-indigo-600 text-white"
+                                            }`}
+                                          >
+                                            {app.aiInterview.status ===
+                                            "completed"
+                                              ? `AI Report: ${app.aiInterview.report?.overallScore ?? 0}%`
+                                              : `AI Q&A (${app.aiInterview.questionCount}Q)`}
+                                          </button>
+                                        )}
                                       </div>
                                     )}
 
@@ -1901,13 +2073,13 @@ function EmployerDashboard() {
         </div>
       )}
 
-      {/* SCHEDULE INTERVIEW MODAL */}
+      {/* SCHEDULE INTERVIEW + LIVE AI Q&A CONFIGURATOR MODAL */}
       {scheduleModalApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl"
+            className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -1916,11 +2088,10 @@ function EmployerDashboard() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    Schedule Candidate Interview
+                    Schedule Interview & Live AI Q&A Assessment
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Select date/time and include meeting instructions for the
-                    candidate.
+                    Set the interview date and optionally enable AI-generated Q&A questions for the applicant.
                   </p>
                 </div>
               </div>
@@ -1946,40 +2117,368 @@ function EmployerDashboard() {
                 />
               </div>
 
+              {/* Employer Option to Add or Remove Live AI Q&A Interview */}
+              <div className="rounded-2xl border border-indigo-200/80 bg-indigo-50/50 p-4 space-y-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-indigo-600" />
+                      Live AI Q&A Interview Assessment
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      AI generates role-relevant questions, sends a join link to the applicant, and scores their answers into an evaluation report.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEnableAiInterview((prev) => !prev)}
+                    className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-extrabold transition ${
+                      enableAiInterview
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                    }`}
+                  >
+                    {enableAiInterview ? "✓ Added to Stage" : "+ Add AI Q&A"}
+                  </button>
+                </div>
+
+                {enableAiInterview && (
+                  <div className="grid gap-3 sm:grid-cols-[140px_1fr] pt-2 border-t border-indigo-200/60">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Question Count *
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        required
+                        value={aiQuestionCount}
+                        onChange={(e) =>
+                          setAiQuestionCount(
+                            Math.max(1, Math.min(15, Number(e.target.value) || 5)),
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Relevant Topic Focus (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={aiTopicFocus}
+                        onChange={(e) => setAiTopicFocus(e.target.value)}
+                        placeholder="e.g. React Architecture, API Design, System Scaling"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Meeting Link / Instructions for Candidate
+                  Additional Instructions / Note for Candidate
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={interviewNote}
                   onChange={(e) => setInterviewNote(e.target.value)}
-                  placeholder="e.g. Google Meet link, agenda, or interviewer names..."
+                  placeholder="Optional instructions or notes for the applicant..."
                   className="w-full resize-none rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScheduleModalApp(null);
-                    setInterviewNote("");
-                  }}
-                  className="rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={scheduling}
-                  className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                  {scheduling ? "Scheduling..." : "Confirm Schedule"}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                {scheduleModalApp.aiInterview?.enabled ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAiInterview(scheduleModalApp)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                  >
+                    Remove AI Interview
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScheduleModalApp(null);
+                      setInterviewNote("");
+                    }}
+                    className="rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={scheduling}
+                    className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {scheduling
+                      ? "Generating AI Questions..."
+                      : enableAiInterview
+                        ? "Generate AI Q&A & Notify Candidate"
+                        : "Confirm Schedule"}
+                  </button>
+                </div>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* AI INTERVIEW EVALUATION REPORT & STAGE ADVANCEMENT MODAL */}
+      {aiReportModalApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="glass-panel w-full max-w-3xl rounded-3xl p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            {(() => {
+              const cand =
+                typeof aiReportModalApp.candidate === "object"
+                  ? (aiReportModalApp.candidate as User)
+                  : null;
+              const job =
+                typeof aiReportModalApp.job === "object"
+                  ? (aiReportModalApp.job as Job)
+                  : null;
+              const ai = aiReportModalApp.aiInterview;
+              const report = ai?.report;
+              const stageMeta = getStageMeta(aiReportModalApp.status);
+
+              return (
+                <div>
+                  <div className="flex items-start justify-between gap-4 pb-5 border-b border-slate-200/80">
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-[11px] font-extrabold text-indigo-700">
+                        <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+                        {ai?.status === "completed"
+                          ? "AI Interview Evaluation Report"
+                          : "Scheduled Live AI Q&A Questions"}
+                      </span>
+                      <h3 className="mt-2 text-xl font-extrabold text-slate-900">
+                        {cand?.name || "Candidate"} — {job?.title || "Role"}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Current Stage: <strong>{stageMeta.label}</strong> •{" "}
+                        {ai?.questionCount || ai?.questions?.length || 0} Questions{" "}
+                        {ai?.scheduledDate
+                          ? `• Scheduled for ${new Date(ai.scheduledDate).toLocaleString()}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setAiReportModalApp(null)}
+                      className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  {/* Executive AI Score & Verdict Banner (when completed) */}
+                  {report ? (
+                    <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-indigo-200/70">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                            Overall AI Assessment Score
+                          </p>
+                          <p className="text-3xl font-extrabold text-indigo-950 mt-0.5">
+                            {report.overallScore} / 100
+                          </p>
+                        </div>
+
+                        <span
+                          className={`rounded-xl border px-3.5 py-1.5 text-xs font-extrabold ${
+                            report.overallScore >= 70
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : report.overallScore >= 45
+                                ? "border-amber-200 bg-amber-50 text-amber-800"
+                                : "border-rose-200 bg-rose-50 text-rose-800"
+                          }`}
+                        >
+                          {report.verdict}
+                        </span>
+                      </div>
+
+                      <p className="mt-3 text-xs leading-relaxed text-slate-700">
+                        {report.summary}
+                      </p>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs">
+                        <div className="rounded-xl border border-emerald-200/80 bg-white/80 p-3">
+                          <p className="font-bold text-emerald-800 mb-1.5">
+                            ✓ Key Strengths Demonstrated
+                          </p>
+                          <ul className="space-y-1 text-slate-600">
+                            {(report.strengths || []).map((s, idx) => (
+                              <li key={idx}>• {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="rounded-xl border border-amber-200/80 bg-white/80 p-3">
+                          <p className="font-bold text-amber-800 mb-1.5">
+                            ⚡ Areas to Probe / Improve
+                          </p>
+                          <ul className="space-y-1 text-slate-600">
+                            {(report.improvements || []).map((imp, idx) => (
+                              <li key={idx}>• {imp}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold">
+                          Awaiting Candidate Completion
+                        </p>
+                        <p className="mt-0.5 text-amber-800">
+                          The candidate has been sent the join link (<code>/interview/{aiReportModalApp._id}</code>). Once they submit their answers, their AI scores and evaluation report will appear below.
+                        </p>
+                      </div>
+                      <Link
+                        to={`/interview/${aiReportModalApp._id}`}
+                        className="shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                      >
+                        Preview Room →
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Question-by-Question Q&A Breakdown */}
+                  <div className="mt-6 space-y-4">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                      Question-by-Question Breakdown ({ai?.questions?.length || 0})
+                    </h4>
+
+                    {(ai?.questions || []).map((q, idx) => (
+                      <div
+                        key={q.questionNumber || idx}
+                        className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-xs space-y-2.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-extrabold text-indigo-600">
+                            Question #{q.questionNumber || idx + 1} • {q.topic}
+                          </span>
+
+                          {ai?.status === "completed" && (
+                            <span
+                              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-extrabold ${
+                                (q.score || 0) >= 75
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : (q.score || 0) >= 45
+                                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                                    : "border-rose-200 bg-rose-50 text-rose-700"
+                              }`}
+                            >
+                              Score: {q.score ?? 0} / 100
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="font-bold text-slate-900 text-sm leading-snug">
+                          {q.question}
+                        </p>
+
+                        {ai?.status === "completed" ? (
+                          <>
+                            <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                Candidate's Submitted Answer
+                              </p>
+                              <p className="text-slate-700 whitespace-pre-line leading-relaxed">
+                                {q.candidateAnswer || "(No answer submitted)"}
+                              </p>
+                            </div>
+
+                            {q.aiFeedback && (
+                              <p className="text-indigo-700 font-medium bg-indigo-50/60 rounded-xl px-3 py-2 border border-indigo-100">
+                                <strong>AI Evaluator Note:</strong> {q.aiFeedback}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          q.expectedKeyPoints &&
+                          q.expectedKeyPoints.length > 0 && (
+                            <div className="text-[11px] text-slate-500">
+                              <strong>Expected Key Points:</strong>{" "}
+                              {q.expectedKeyPoints.join(" • ")}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Employer Evaluation Decision Footer */}
+                  <div className="mt-6 pt-5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAiInterview(aiReportModalApp)}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                    >
+                      Remove AI Interview from Stage
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {aiReportModalApp.status !== "Rejected" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleStatusChange(aiReportModalApp._id, "Rejected");
+                            setAiReportModalApp(null);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          Reject Candidate
+                        </button>
+                      )}
+
+                      {stageMeta.next && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleStatusChange(
+                              aiReportModalApp._id,
+                              stageMeta.next!,
+                            );
+                            setAiReportModalApp(null);
+                          }}
+                          className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold text-white"
+                        >
+                          <span>Approve & Advance to {stageMeta.next}</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setAiReportModalApp(null)}
+                        className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </motion.div>
         </div>
       )}

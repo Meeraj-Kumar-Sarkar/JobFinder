@@ -32,6 +32,48 @@ export class JobController {
 
   async getJobs(req, res) {
     try {
+      const isSignedIn = Boolean(req.user?._id);
+      const isEmployerFilter = Boolean(req.query.company || req.query.createdBy);
+      const requestedSort = req.query.sort;
+      const useRecommendationAlgo =
+        isSignedIn &&
+        !isEmployerFilter &&
+        (!requestedSort ||
+          requestedSort === "default" ||
+          requestedSort === "recommended");
+
+      if (useRecommendationAlgo) {
+        const recommended_jobs = await jobService.jobRecommendation_service(
+          req.user._id,
+          req.query,
+        );
+        const jobs = (recommended_jobs || []).map((item) => ({
+          ...item.details,
+          recommendationScore: Math.round(item.score),
+        }));
+        const result = {
+          jobs,
+          recommended_jobs,
+          isRecommended: true,
+          pagination: {
+            total: jobs.length,
+            page: 1,
+            limit: jobs.length || 20,
+            totalPages: 1,
+          },
+        };
+        return res
+          .status(200)
+          .json(
+            new ApiResponse(
+              200,
+              result,
+              "Personalized job recommendations retrieved successfully",
+            ),
+          );
+      }
+
+      // Not signed in (or explicit standard sort): use previous normal job listing
       const result = await jobService.getJobs(req.query);
       return res
         .status(200)
@@ -87,17 +129,49 @@ export class JobController {
     }
   }
 
-  //job recommendation controller
-  async recommendJob(req,res) {
-    try{
-      const {candidate_id}=req.body
-      const recommended_jobs=await jobService.jobRecommendation_service(skills,preference,experience)
-      return res
-                .status(200)
-                .json({message:"Here are you Job reccomendations:",recommended_jobs:recommended_jobs})
-    }
-    catch(error){
-      return handleJobError(res,error,"Failed to reccomend job")
+  //job recommendation controller (Only for signed-in users)
+  async recommendJob(req, res) {
+    try {
+      const candidateId =
+        req.user?._id ||
+        req.body?.candidate_id ||
+        req.query?.candidate_id ||
+        req.params?.candidateId;
+
+      if (!candidateId) {
+        return res.status(401).json({
+          success: false,
+          message: "Please sign in to access personalized job recommendations.",
+        });
+      }
+
+      const recommended_jobs = await jobService.jobRecommendation_service(
+        candidateId,
+        req.query,
+      );
+      const jobs = (recommended_jobs || []).map((item) => ({
+        ...item.details,
+        recommendationScore: Math.round(item.score),
+      }));
+
+      return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: "Here are your Job recommendations:",
+        recommended_jobs,
+        data: {
+          recommended_jobs,
+          jobs,
+          pagination: {
+            total: jobs.length,
+            page: 1,
+            limit: jobs.length || 10,
+            totalPages: 1,
+          },
+        },
+      });
+    } catch (error) {
+      return handleJobError(res, error, "Failed to recommend job");
     }
   }
 }

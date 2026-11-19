@@ -121,9 +121,12 @@ export async function fetchUnifiedNotifications(
           }
         }
 
-        // 2. Scheduled Interview Invitation
-        if (app.interviewDate) {
-          const synthId = `synth-interview-${app._id}-${app.interviewDate}`;
+        // 2. Scheduled Interview Invitation (including Live AI Q&A Interview)
+        if (app.interviewDate || app.aiInterview?.enabled) {
+          const dateVal = app.interviewDate || app.aiInterview?.scheduledDate || updatedTime;
+          const synthId = `synth-interview-${app._id}-${dateVal}-${
+            app.aiInterview?.enabled ? "ai" : "std"
+          }`;
           const alreadyOnServer = serverNotifications.some(
             (n) =>
               (typeof n.application === "object"
@@ -132,7 +135,8 @@ export async function fetchUnifiedNotifications(
           );
 
           if (!alreadyOnServer && !dismissedIds.has(synthId)) {
-            const formattedDate = new Date(app.interviewDate).toLocaleString();
+            const formattedDate = new Date(dateVal).toLocaleString();
+            const isAi = Boolean(app.aiInterview?.enabled);
             const notePart = app.feedback?.trim()
               ? ` • Note: "${app.feedback.trim()}"`
               : "";
@@ -143,8 +147,12 @@ export async function fetchUnifiedNotifications(
               application: app,
               companyName,
               type: "interview",
-              title: `Interview Scheduled — ${jobTitle}`,
-              message: `${companyName} scheduled your interview for "${jobTitle}" on ${formattedDate}.${notePart}`,
+              title: isAi
+                ? `Live AI Q&A Interview (${app.aiInterview?.questionCount || 5} Questions) — ${jobTitle}`
+                : `Interview Scheduled — ${jobTitle}`,
+              message: isAi
+                ? `${companyName} invited you to a Live AI Q&A Interview (${app.aiInterview?.questionCount || 5} role-specific questions) for "${jobTitle}" scheduled on ${formattedDate}. Join link: /interview/${app._id}`
+                : `${companyName} scheduled your interview for "${jobTitle}" on ${formattedDate}.${notePart}`,
               isRead: readIds.has(synthId),
               createdAt: updatedTime,
               synthetic: true,

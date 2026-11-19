@@ -33,14 +33,20 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
   const fetchFeatured = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await jobsApi.getAll({ limit: 6 });
+      // Signed-in users get the new AI + JobQueue recommendation algorithm;
+      // guests/unauthenticated visitors use the normal job listing.
+      const res =
+        isAuthenticated && user?._id
+          ? await jobsApi.getRecommended(user._id, { limit: 6 }, user)
+          : await jobsApi.getAll({ limit: 6 });
+
       const list = res.data?.jobs || res.data || [];
       const total = res.data?.pagination?.total ?? list.length;
       setFeaturedJobs(list);
@@ -51,7 +57,7 @@ function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     fetchFeatured();
@@ -352,18 +358,34 @@ function Home() {
         </div>
       </section>
 
-      {/* Featured Job Openings */}
+      {/* Featured / Recommended Job Openings */}
       <section className="py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-600">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Active Opportunities
+                {isAuthenticated ? (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Personalized AI Recommendation Engine
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Active Opportunities
+                  </>
+                )}
               </div>
               <h2 className="mt-1.5 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-                Featured Job Openings
+                {isAuthenticated
+                  ? "Recommended Jobs For You"
+                  : "Featured Job Openings"}
               </h2>
+              {isAuthenticated && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Ranked for your profile using AI weighted skill importance (50%), experience match (30%), and job-type preference (20%).
+                </p>
+              )}
             </div>
 
             <Link
@@ -461,9 +483,18 @@ function Home() {
                           </div>
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                              {job.jobType}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {isAuthenticated &&
+                                job.recommendationScore !== undefined && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[11px] font-extrabold text-indigo-700">
+                                    <Sparkles className="h-3 w-3 text-indigo-600" />
+                                    {job.recommendationScore}% Match
+                                  </span>
+                                )}
+                              <span className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                {job.jobType}
+                              </span>
+                            </div>
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
                               <Clock className="h-3 w-3 text-indigo-500" />
                               {formatJobAge(job.createdAt, job._id)}

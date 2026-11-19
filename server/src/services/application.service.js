@@ -6,6 +6,7 @@ import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { APPLICATION_STATUSES } from "../utils/constants.js";
 import { sanitizeUrl } from "../middleware/security.middleware.js";
+import { call_Genai } from "../ai_models/genai_model.js";
 
 export class ServiceError extends Error {
   constructor(statusCode, message) {
@@ -330,7 +331,7 @@ export class ApplicationService {
         })
         .populate({
           path: "job",
-          select: "title location jobType company",
+          select: "title location jobType company requirements description category",
           populate: { path: "company", select: "name logo" },
         })
         .sort({ createdAt: -1 })
@@ -469,9 +470,24 @@ export class ApplicationService {
   }
 
   /**
-   * Schedule an interview for an applicant.
+   * Schedule an interview for an applicant (optionally configuring Live AI Q&A Interview).
    */
-  async scheduleInterview(applicationId, interviewDate, feedback, stage) {
+  async scheduleInterview(applicationId, interviewDate, feedback, stage, aiConfig = null) {
+    if (aiConfig && aiConfig.enabled !== undefined) {
+      if (aiConfig.enabled) {
+        return this.configureAiInterview(applicationId, {
+          enabled: true,
+          interviewDate,
+          feedback,
+          stage,
+          questionCount: aiConfig.questionCount,
+          topicFocus: aiConfig.topicFocus,
+        });
+      } else {
+        await this.configureAiInterview(applicationId, { enabled: false });
+      }
+    }
+
     if (!isValidObjectId(applicationId)) {
       throw new ServiceError(400, "Invalid application ID format");
     }
@@ -699,6 +715,508 @@ export class ApplicationService {
         $inc: { employees: 1 },
       });
     }
+  }
+
+  /**
+   * Helper: Generate tailored Q&A interview questions using Gemini AI (with domain-aware fallback).
+   */
+  async generateAiQuestionsForJob(job, questionCount = 5, topicFocus = "") {
+    const count = Math.max(1, Math.min(15, Number(questionCount) || 5));
+    const jobTitle = job?.title || "Software Engineer";
+    const category = job?.category || "Technology";
+    const description = job?.description || "";
+    const requirements = Array.isArray(job?.requirements) ? job.requirements : [];
+    const customTopics = topicFocus ? topicFocus.trim() : "";
+
+    const prompt = `
+You are an expert technical interviewer and Applicant Tracking System (ATS) assessment designer.
+
+Generate exactly ${count} interview questions for a candidate applying for the following role:
+- Job Title: ${jobTitle}
+- Category: ${category}
+- Required Skills: ${JSON.stringify(requirements)}
+- Job Description: ${description}
+- Additional Topic Focus from Hiring Manager: ${customTopics || "Core role competencies & practical problem solving"}
+
+INSTRUCTIONS:
+1. Create ${count} highly relevant, scenario-based or technical/domain questions that test real competency for this specific role and required skills.
+2. For each question, specify:
+   - "questionNumber": integer from 1 to ${count}
+   - "question": the clear, direct interview question
+   - "topic": the specific skill or topic being assessed
+   - "expectedKeyPoints": array of 2 to 4 key concepts a strong answer should cover
+3. Return ONLY a valid JSON array of objects. Do not wrap in markdown code fences or add extra commentary.
+`;
+
+    try {
+      const raw = await call_Genai(prompt, { maxOutputTokens: 1800 });
+      if (raw) {
+        const cleaned = String(raw)
+          .replace(/```json/gi, "")
+          .replace(/```/g, "")
+          .trim();
+        const startIdx = cleaned.indexOf("[");
+        const endIdx = cleaned.lastIndexOf("]");
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          const parsed = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.slice(0, count).map((q, idx) => ({
+              questionNumber: idx + 1,
+              question: String(q.question || "").trim(),
+              topic: String(
+                q.topic || requirements[idx % Math.max(1, requirements.length)] || category,
+              ).trim(),
+              expectedKeyPoints: Array.isArray(q.expectedKeyPoints)
+                ? q.expectedKeyPoints.map((p) => String(p).trim()).filter(Boolean)
+                : ["Core concepts", "Practical implementation", "Trade-offs & best practices"],
+              candidateAnswer: "",
+              score: 0,
+              aiFeedback: "",
+            }));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("AI question generation fallback triggered:", err?.message || err);
+    }
+
+    // Fallback generator tailored to job requirements, topicFocus, and role title
+    const topicPool = [
+      ...(customTopics
+        ? customTopics
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : []),
+      ...requirements,
+      `${jobTitle} Architecture`,
+      "Problem Solving & Debugging",
+      "Production Best Practices",
+      "System Scalability & Trade-offs",
+      "Team Collaboration & Delivery",
+    ];
+
+    const templates = [
+      (topic) => ({
+        question: `In the context of a ${jobTitle} role, walk through how you have used ${topic} in a production scenario. What architectural decisions or trade-offs did you make?`,
+        expectedKeyPoints: [
+          `Practical hands-on application of ${topic}`,
+          "Clear explanation of trade-offs and design decisions",
+          "Measurable impact or production reliability considerations",
+        ],
+      }),
+      (topic) => ({
+        question: `Suppose you encounter a critical performance bottleneck or edge-case failure involving ${topic} while working on our ${category} platform. How would you diagnose, isolate, and resolve the issue?`,
+        expectedKeyPoints: [
+          "Systematic debugging and root-cause analysis methodology",
+          `Deep understanding of ${topic} internals and failure modes`,
+          "Preventative monitoring and testing strategy",
+        ],
+      }),
+      (topic) => ({
+        question: `What are the most important best practices, security considerations, or quality standards you follow when designing solutions with ${topic} for a ${jobTitle} position?`,
+        expectedKeyPoints: [
+          `Industry best practices for ${topic}`,
+          "Security, maintainability, and edge-case handling",
+          "Code quality and automated verification",
+        ],
+      }),
+      (topic) => ({
+        question: `Describe a challenging requirement you delivered using ${topic}. How did you structure your approach from initial design to final deployment?`,
+        expectedKeyPoints: [
+          "End-to-end ownership and structured problem decomposition",
+          `Effective utilization of ${topic}`,
+          "Handling constraints and stakeholder alignment",
+        ],
+      }),
+      (topic) => ({
+        question: `When integrating ${topic} with other components in a ${jobTitle} workflow, how do you ensure reliability, clean interfaces, and long-term maintainability?`,
+        expectedKeyPoints: [
+          "Clean abstraction and interface design",
+          `Resilience and error handling with ${topic}`,
+          "Documentation and team scalability",
+        ],
+      }),
+    ];
+
+    const fallbackQuestions = [];
+    for (let i = 0; i < count; i++) {
+      const topic = topicPool[i % topicPool.length] || jobTitle;
+      const tpl = templates[i % templates.length](topic);
+      fallbackQuestions.push({
+        questionNumber: i + 1,
+        question: tpl.question,
+        topic,
+        expectedKeyPoints: tpl.expectedKeyPoints,
+        candidateAnswer: "",
+        score: 0,
+        aiFeedback: "",
+      });
+    }
+    return fallbackQuestions;
+  }
+
+  /**
+   * Employer: Add (Enable/Schedule) or Remove (Disable) Live AI Q&A Interview on an application.
+   */
+  async configureAiInterview(applicationId, config = {}) {
+    if (!isValidObjectId(applicationId)) {
+      throw new ServiceError(400, "Invalid application ID format");
+    }
+
+    const application = await Application.findById(applicationId)
+      .populate("job")
+      .populate("candidate", "name email");
+
+    if (!application) {
+      throw new ServiceError(404, "Application not found");
+    }
+
+    const enabled = config.enabled !== undefined ? Boolean(config.enabled) : true;
+
+    // If employer removes the AI Q&A interview from this stage
+    if (!enabled) {
+      application.aiInterview = {
+        enabled: false,
+        status: "not_configured",
+        scheduledDate: undefined,
+        questionCount: 5,
+        topicFocus: "",
+        joinLink: "",
+        questions: [],
+        report: undefined,
+      };
+      await application.save();
+      return application;
+    }
+
+    const questionCount = Math.max(1, Math.min(15, Number(config.questionCount) || 5));
+    const topicFocus = config.topicFocus ? String(config.topicFocus).trim() : "";
+    const parsedDate = config.interviewDate
+      ? new Date(config.interviewDate)
+      : application.interviewDate || new Date();
+
+    if (isNaN(parsedDate.getTime())) {
+      throw new ServiceError(400, "Valid interview date and time is required");
+    }
+
+    // Generate AI questions based on the job details and topic relevance
+    const generatedQuestions = await this.generateAiQuestionsForJob(
+      application.job,
+      questionCount,
+      topicFocus,
+    );
+
+    const joinLink = `/interview/${application._id}`;
+
+    application.interviewDate = parsedDate;
+    if (config.stage && APPLICATION_STATUSES.includes(config.stage)) {
+      application.status = config.stage;
+    } else if (["Applied", "Screening"].includes(application.status)) {
+      application.status = "Technical";
+    }
+
+    application.aiInterview = {
+      enabled: true,
+      status: "scheduled",
+      scheduledDate: parsedDate,
+      questionCount: generatedQuestions.length,
+      topicFocus,
+      joinLink,
+      questions: generatedQuestions,
+      report: undefined,
+    };
+
+    const scheduleSummary = `Live AI Q&A Interview (${generatedQuestions.length} questions) scheduled for ${parsedDate.toLocaleString()}. Join link: ${joinLink}${
+      config.feedback ? ` • Note: ${config.feedback.trim()}` : ""
+    }`;
+    application.feedback = scheduleSummary;
+
+    await application.save();
+
+    // Notify the candidate with the scheduled date and direct join link
+    try {
+      const populatedJob = await Job.findById(application.job?._id || application.job)
+        .populate("company", "name")
+        .select("title company");
+      const companyName = populatedJob?.company?.name || "";
+
+      await Notification.create({
+        user: application.candidate?._id || application.candidate,
+        job: application.job?._id || application.job,
+        application: application._id,
+        companyName: companyName || undefined,
+        type: "interview",
+        title: `Live AI Q&A Interview Scheduled — ${populatedJob?.title || "Role"}`,
+        message: `You have been invited to a Live AI Q&A Interview (${generatedQuestions.length} questions${
+          topicFocus ? ` focused on ${topicFocus}` : ""
+        }) scheduled for ${parsedDate.toLocaleString()}. Join via your interview room link: ${joinLink}`,
+        isRead: false,
+      });
+    } catch (err) {
+      console.error("Failed to create AI interview notification:", err);
+    }
+
+    return application;
+  }
+
+  /**
+   * Candidate: Submit answers for Live AI Q&A Interview -> AI evaluates, scores, and stores report for employer.
+   */
+  async submitAiInterview(applicationId, payload = {}) {
+    if (!isValidObjectId(applicationId)) {
+      throw new ServiceError(400, "Invalid application ID format");
+    }
+
+    const application = await Application.findById(applicationId)
+      .populate({
+        path: "job",
+        populate: { path: "company", select: "name" },
+      })
+      .populate("candidate", "name email skills experience");
+
+    if (!application) {
+      throw new ServiceError(404, "Application not found");
+    }
+
+    if (!application.aiInterview?.enabled) {
+      throw new ServiceError(
+        400,
+        "Live AI Q&A Interview is not enabled for this application",
+      );
+    }
+
+    const rawAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+    const questions = application.aiInterview.questions || [];
+
+    if (questions.length === 0) {
+      throw new ServiceError(400, "No interview questions found for this session");
+    }
+
+    // Map candidate answers onto each question
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const match = rawAnswers.find(
+        (a) =>
+          typeof a === "object" &&
+          a !== null &&
+          Number(a.questionNumber) === Number(q.questionNumber || i + 1),
+      );
+      const answerText =
+        match?.answer !== undefined
+          ? String(match.answer).trim()
+          : typeof rawAnswers[i] === "string"
+            ? rawAnswers[i].trim()
+            : typeof rawAnswers[i]?.answer === "string"
+              ? rawAnswers[i].answer.trim()
+              : "";
+      q.candidateAnswer = answerText;
+    }
+
+    const jobTitle = application.job?.title || "Role";
+    const jobReqs = application.job?.requirements || [];
+
+    // Evaluate with Gemini AI
+    const evalPrompt = `
+You are an expert technical hiring committee and ATS Interview Evaluator.
+
+Evaluate the candidate's responses for the "${jobTitle}" role (Required Skills: ${JSON.stringify(jobReqs)}).
+
+QUESTIONS AND CANDIDATE ANSWERS:
+${JSON.stringify(
+  questions.map((q) => ({
+    questionNumber: q.questionNumber,
+    topic: q.topic,
+    question: q.question,
+    expectedKeyPoints: q.expectedKeyPoints,
+    candidateAnswer: q.candidateAnswer,
+  })),
+  null,
+  2,
+)}
+
+INSTRUCTIONS:
+1. Score each question from 0 to 100 based on technical accuracy, depth, relevance to expectedKeyPoints, and clarity.Empty or irrelevant answers must score 0-15.
+2. Provide concise, constructive "aiFeedback" (1-2 sentences) for each question explaining why it received that score.
+3. Calculate "overallScore" (integer 0 to 100) as the average of all question scores.
+4. Determine "verdict" from one of:
+   - "Strong Hire — Advance to Next Stage" (score >= 80)
+   - "Recommended — Proceed to Next Stage" (score 65-79)
+   - "Borderline — Manual Review Recommended" (score 45-64)
+   - "Does Not Meet Bar" (score < 45)
+5. Write an executive "summary" (2-3 sentences) for the hiring manager.
+6. Provide "strengths" (array of 2-3 specific strengths demonstrated) and "improvements" (array of 2-3 gaps or follow-up areas).
+
+Return ONLY a valid JSON object with the exact shape:
+{
+  "evaluations": [
+    { "questionNumber": 1, "score": 85, "aiFeedback": "..." }
+  ],
+  "overallScore": 85,
+  "verdict": "Strong Hire — Advance to Next Stage",
+  "summary": "...",
+  "strengths": ["...", "..."],
+  "improvements": ["...", "..."]
+}
+`;
+
+    let aiParsedReport = null;
+    try {
+      const rawEval = await call_Genai(evalPrompt, { maxOutputTokens: 2000 });
+      if (rawEval) {
+        const cleaned = String(rawEval)
+          .replace(/```json/gi, "")
+          .replace(/```/g, "")
+          .trim();
+        const startIdx = cleaned.indexOf("{");
+        const endIdx = cleaned.lastIndexOf("}");
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          aiParsedReport = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+        }
+      }
+    } catch (err) {
+      console.error("AI evaluation fallback triggered:", err?.message || err);
+    }
+
+    // Apply per-question scores & feedback (from AI or deterministic rubric fallback)
+    let totalScore = 0;
+    const strengthsSet = new Set();
+    const improvementsSet = new Set();
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const aiItem = aiParsedReport?.evaluations?.find(
+        (e) => Number(e.questionNumber) === Number(q.questionNumber || i + 1),
+      );
+
+      if (
+        aiItem &&
+        Number.isFinite(Number(aiItem.score)) &&
+        Number(aiItem.score) >= 0 &&
+        Number(aiItem.score) <= 100
+      ) {
+        q.score = Math.round(Number(aiItem.score));
+        q.aiFeedback = String(
+          aiItem.aiFeedback || "Evaluated against role competency rubric.",
+        ).trim();
+      } else {
+        // Rubric-based fallback scoring
+        const ans = (q.candidateAnswer || "").trim();
+        const wordCount = ans ? ans.split(/\s+/).length : 0;
+        const lowerAns = ans.toLowerCase();
+        const topicWords = String(q.topic || "")
+          .toLowerCase()
+          .split(/[\s,/+-]+/)
+          .filter((w) => w.length > 2);
+        const keyPointHits = (q.expectedKeyPoints || []).filter((kp) =>
+          String(kp)
+            .toLowerCase()
+            .split(/\s+/)
+            .some((w) => w.length > 3 && lowerAns.includes(w)),
+        ).length;
+        const topicHit = topicWords.some((w) => lowerAns.includes(w));
+
+        let computed = 0;
+        if (wordCount === 0) {
+          computed = 0;
+          q.aiFeedback = "No response was provided for this question.";
+        } else if (wordCount < 10) {
+          computed = 25 + (topicHit ? 10 : 0);
+          q.aiFeedback = `Response on ${q.topic} was very brief (${wordCount} words) and lacked implementation depth or concrete examples.`;
+        } else {
+          const lengthScore = Math.min(45, Math.round((wordCount / 55) * 45));
+          const relevanceScore =
+            (topicHit ? 20 : 8) +
+            Math.min(35, keyPointHits * 12 + (wordCount >= 35 ? 11 : 0));
+          computed = Math.min(96, lengthScore + relevanceScore);
+          q.aiFeedback =
+            computed >= 75
+              ? `Strong, detailed explanation of ${q.topic} covering practical architecture and trade-offs.`
+              : `Adequate coverage of ${q.topic}, though deeper discussion of edge cases and production trade-offs would strengthen the answer.`;
+        }
+        q.score = computed;
+      }
+
+      totalScore += q.score;
+      if (q.score >= 75) {
+        strengthsSet.add(`Strong competency demonstrated in ${q.topic}`);
+      } else {
+        improvementsSet.add(`Further depth recommended in ${q.topic}`);
+      }
+    }
+
+    const avgScore = Math.round(totalScore / Math.max(1, questions.length));
+    const overallScore =
+      aiParsedReport &&
+      Number.isFinite(Number(aiParsedReport.overallScore)) &&
+      Number(aiParsedReport.overallScore) >= 0 &&
+      Number(aiParsedReport.overallScore) <= 100
+        ? Math.round(Number(aiParsedReport.overallScore))
+        : avgScore;
+
+    const defaultVerdict =
+      overallScore >= 80
+        ? "Strong Hire — Advance to Next Stage"
+        : overallScore >= 65
+          ? "Recommended — Proceed to Next Stage"
+          : overallScore >= 45
+            ? "Borderline — Manual Review Recommended"
+            : "Does Not Meet Bar";
+
+    const verdict = String(aiParsedReport?.verdict || defaultVerdict).trim();
+    const summary = String(
+      aiParsedReport?.summary ||
+        `${application.candidate?.name || "The candidate"} completed the ${questions.length}-question Live AI Interview for ${jobTitle} with an overall score of ${overallScore}/100 (${verdict}).`,
+    ).trim();
+
+    const strengths =
+      Array.isArray(aiParsedReport?.strengths) &&
+      aiParsedReport.strengths.length > 0
+        ? aiParsedReport.strengths.map((s) => String(s).trim())
+        : Array.from(strengthsSet).length > 0
+          ? Array.from(strengthsSet)
+          : ["Completed all assigned interview questions on schedule"];
+
+    const improvements =
+      Array.isArray(aiParsedReport?.improvements) &&
+      aiParsedReport.improvements.length > 0
+        ? aiParsedReport.improvements.map((s) => String(s).trim())
+        : Array.from(improvementsSet).length > 0
+          ? Array.from(improvementsSet)
+          : ["Probe production scaling scenarios in the next round"];
+
+    application.aiInterview.status = "completed";
+    application.aiInterview.report = {
+      overallScore,
+      verdict,
+      summary,
+      strengths,
+      improvements,
+      completedAt: new Date(),
+    };
+
+    await application.save();
+
+    // Notify the employer that the AI Interview Report is ready for evaluation
+    if (application.job?.createdBy) {
+      try {
+        await Notification.create({
+          user: application.job.createdBy,
+          sender: application.candidate?._id,
+          job: application.job._id,
+          application: application._id,
+          companyName: application.job?.company?.name,
+          type: "interview",
+          title: `AI Interview Report Ready (${overallScore}/100) — ${application.candidate?.name || "Applicant"}`,
+          message: `${application.candidate?.name || "Candidate"} completed the Live AI Q&A Interview for "${jobTitle}". Overall Score: ${overallScore}/100 (${verdict}). Open your Employer ATS Dashboard to review the full Q&A report and advance the candidate.`,
+          isRead: false,
+        });
+      } catch (err) {
+        console.error("Failed to notify employer of completed AI interview:", err);
+      }
+    }
+
+    return application;
   }
 }
 

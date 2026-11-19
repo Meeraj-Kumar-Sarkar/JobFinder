@@ -452,19 +452,43 @@ function Notifications() {
                           {item.message}
                         </p>
 
-                        {/* Extra Interview Callout Box if interviewDate exists */}
-                        {appObj?.interviewDate && (
-                          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-violet-200 dark:border-violet-500/30 bg-violet-50/70 dark:bg-violet-950/50 px-3.5 py-2.5 text-xs">
-                            <span className="font-bold text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
-                              <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-300" />
-                              Scheduled Interview:{" "}
-                              {new Date(appObj.interviewDate).toLocaleString()}
-                            </span>
-                            {appObj.status && (
-                              <span className="rounded-full bg-white dark:bg-violet-500/20 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/30">
-                                Stage: {appObj.status}
-                              </span>
-                            )}
+                        {/* Extra Interview Callout Box if interviewDate or AI Interview link exists */}
+                        {(appObj?.interviewDate ||
+                          appObj?.aiInterview?.enabled ||
+                          item.message.includes("/interview/")) && (
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 dark:border-violet-500/30 bg-violet-50/70 dark:bg-violet-950/50 px-3.5 py-2.5 text-xs">
+                            <div className="flex flex-wrap items-center gap-2.5">
+                              {appObj?.interviewDate && (
+                                <span className="font-bold text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
+                                  <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+                                  Scheduled Interview:{" "}
+                                  {new Date(appObj.interviewDate).toLocaleString()}
+                                </span>
+                              )}
+                              {appObj?.status && (
+                                <span className="rounded-full bg-white dark:bg-violet-500/20 px-2.5 py-0.5 text-[11px] font-bold text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/30">
+                                  Stage: {appObj.status}
+                                </span>
+                              )}
+                            </div>
+
+                            {user?.role !== "employer" &&
+                              (appObj?.aiInterview?.enabled ||
+                                item.message.includes("/interview/")) && (
+                                <Link
+                                  to={
+                                    appObj?._id
+                                      ? `/interview/${appObj._id}`
+                                      : item.message.match(/\/interview\/[a-f0-9]+/i)?.[0] ||
+                                        "/dashboard"
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="btn-premium inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold text-white"
+                                >
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  Join Live AI Q&A Interview →
+                                </Link>
+                              )}
                           </div>
                         )}
 

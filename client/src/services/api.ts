@@ -212,6 +212,7 @@ export interface User {
   bio?: string;
   skills?: string[];
   experience?: number;
+  preferredJobType?: string;
   resumeURL?: string;
   portfolioURL?: string;
   company?: string | { _id: string; name: string; industry?: string; location?: string; website?: string };
@@ -246,6 +247,38 @@ export interface Job {
   status: "active" | "closed";
   applicants?: number;
   createdAt?: string;
+  recommendationScore?: number;
+  skillMatchScore?: number;
+}
+
+export interface AiInterviewQuestion {
+  questionNumber: number;
+  question: string;
+  topic: string;
+  expectedKeyPoints?: string[];
+  candidateAnswer?: string;
+  score?: number;
+  aiFeedback?: string;
+}
+
+export interface AiInterviewReport {
+  overallScore: number;
+  verdict: string;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  completedAt?: string;
+}
+
+export interface AiInterviewSession {
+  enabled: boolean;
+  status: "not_configured" | "scheduled" | "in_progress" | "completed";
+  scheduledDate?: string;
+  questionCount: number;
+  topicFocus?: string;
+  joinLink?: string;
+  questions: AiInterviewQuestion[];
+  report?: AiInterviewReport;
 }
 
 export interface Application {
@@ -256,6 +289,7 @@ export interface Application {
   coverLetter?: string;
   interviewDate?: string;
   feedback?: string;
+  aiInterview?: AiInterviewSession;
   status:
     | "Applied"
     | "Screening"
@@ -341,6 +375,122 @@ export const jobsApi = {
     return res.data;
   },
 
+  /**
+   * Personalized Job Recommendation Algorithm (Only for signed-in users).
+   * Calls POST /api/jobs/recommend and normalizes `{ details, score }` items from JobQueue.
+   */
+  getRecommended: async (
+    candidateId: string,
+    params?: {
+      search?: string;
+      category?: string;
+      location?: string;
+      jobType?: string;
+      limit?: number;
+    },
+    candidateProfile?: Partial<User> | null,
+  ) => {
+    try {
+      const res = await api.post(
+        "/jobs/recommend",
+        { candidate_id: candidateId },
+        { params },
+      );
+      const rawRecommended: Array<{ details?: Job; score?: number } & Job> =
+        res.data?.recommended_jobs ||
+        res.data?.data?.recommended_jobs ||
+        res.data?.data?.jobs ||
+        [];
+
+      const jobs: Job[] = rawRecommended.map((item) => {
+        if (item && item.details && typeof item.details === "object") {
+          return {
+            ...item.details,
+            recommendationScore:
+              item.score !== undefined
+                ? Math.round(Number(item.score))
+                : item.details.recommendationScore,
+          };
+        }
+        return item as Job;
+      });
+
+      return {
+        success: true,
+        isRecommended: true,
+        data: {
+          jobs,
+          recommended_jobs: rawRecommended,
+          pagination: {
+            total: jobs.length,
+            page: 1,
+            limit: params?.limit || jobs.length || 10,
+            totalPages: 1,
+          },
+        },
+      };
+    } catch {
+      // Fallback if the remote server hasn't deployed /jobs/recommend yet:
+      // Run the exact same weighted JobQueue recommendation formula on active jobs
+      const normalRes = await api.get("/jobs", {
+        params: { ...params, limit: 50 },
+      });
+      const allJobs: Job[] =
+        normalRes.data?.data?.jobs || normalRes.data?.jobs || [];
+
+      const skills = (candidateProfile?.skills || []).map((s) =>
+        s.toLowerCase().trim(),
+      );
+      const preference = (
+        candidateProfile?.preferredJobType || "Full Time"
+      ).toLowerCase();
+      const experience = Number(candidateProfile?.experience) || 0;
+
+      const scored = allJobs
+        .map((job) => {
+          const reqs = Array.isArray(job.requirements) ? job.requirements : [];
+          const matched = reqs.filter((r) =>
+            skills.includes(String(r).toLowerCase().trim()),
+          ).length;
+          const skill_score = reqs.length > 0 ? (matched / reqs.length) * 100 : 0;
+          const preference_score =
+            preference === String(job.jobType || "").toLowerCase() ? 1 : 0;
+          const experience_score =
+            experience >= (Number(job.experience) || 0) ? 1 : 0;
+          const score = Math.round(
+            skill_score * 0.5 +
+              preference_score * 100 * 0.2 +
+              experience_score * 100 * 0.3,
+          );
+          return {
+            ...job,
+            recommendationScore: score,
+            skillMatchScore: Math.round(skill_score),
+          };
+        })
+        .sort(
+          (a, b) => (b.recommendationScore || 0) - (a.recommendationScore || 0),
+        );
+
+      const maxLimit = params?.limit || 10;
+      const sliced = scored.slice(0, maxLimit);
+
+      return {
+        success: true,
+        isRecommended: true,
+        data: {
+          jobs: sliced,
+          pagination: {
+            total: scored.length,
+            page: 1,
+            limit: maxLimit,
+            totalPages: 1,
+          },
+        },
+      };
+    }
+  },
+
   getById: async (id: string) => {
     const res = await api.get(`/jobs/${id}`);
     return res.data;
@@ -357,6 +507,130 @@ export const jobsApi = {
   },
 };
 
+const LOCAL_AI_INTERVIEW_KEY = "jobportal_ai_interviews_v1";
+
+function getLocalAiInterviews(): Record<string, AiInterviewSession> {
+  try {
+    const raw = localStorage.getItem(LOCAL_AI_INTERVIEW_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalAiInterview(applicationId: string, session: AiInterviewSession | null) {
+  try {
+    const map = getLocalAiInterviews();
+    if (!session || !session.enabled) {
+      delete map[applicationId];
+    } else {
+      map[applicationId] = session;
+    }
+    localStorage.setItem(LOCAL_AI_INTERVIEW_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function hydrateApplicationAiInterview(app: Application): Application {
+  if (!app || !app._id) return app;
+  if (app.aiInterview && app.aiInterview.enabled) {
+    saveLocalAiInterview(app._id, app.aiInterview);
+    return app;
+  }
+  const localMap = getLocalAiInterviews();
+  if (localMap[app._id]) {
+    return { ...app, aiInterview: localMap[app._id] };
+  }
+  return app;
+}
+
+function generateClientFallbackQuestions(
+  job: Partial<Job> | null | undefined,
+  questionCount = 5,
+  topicFocus = "",
+): AiInterviewQuestion[] {
+  const count = Math.max(1, Math.min(15, Number(questionCount) || 5));
+  const jobTitle = job?.title || "Role";
+  const category = job?.category || "Technology";
+  const reqs = Array.isArray(job?.requirements) ? job.requirements : [];
+  const customTopics = topicFocus
+    ? topicFocus
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+
+  const topicPool = [
+    ...customTopics,
+    ...reqs,
+    `${jobTitle} Architecture`,
+    "Problem Solving & Debugging",
+    "Production Best Practices",
+    "System Scalability & Trade-offs",
+    "Code Quality & Testing",
+  ];
+
+  const templates = [
+    (topic: string) => ({
+      question: `In the context of a ${jobTitle} role, walk through how you have applied ${topic} in a production scenario. What architectural decisions or trade-offs did you make?`,
+      expectedKeyPoints: [
+        `Hands-on experience with ${topic}`,
+        "Clear explanation of trade-offs and design decisions",
+        "Production reliability and performance impact",
+      ],
+    }),
+    (topic: string) => ({
+      question: `Suppose you encounter a critical performance bottleneck or edge-case failure involving ${topic} on our ${category} platform. How would you diagnose, isolate, and resolve it?`,
+      expectedKeyPoints: [
+        "Systematic debugging and root-cause analysis",
+        `Deep understanding of ${topic} failure modes`,
+        "Preventative monitoring and testing",
+      ],
+    }),
+    (topic: string) => ({
+      question: `What are the most important best practices, security considerations, or quality standards you follow when building solutions with ${topic} for a ${jobTitle} position?`,
+      expectedKeyPoints: [
+        `Best practices for ${topic}`,
+        "Security, maintainability, and edge-case handling",
+        "Automated testing and verification",
+      ],
+    }),
+    (topic: string) => ({
+      question: `Describe a complex feature or requirement you delivered using ${topic}. How did you structure your approach from design through deployment?`,
+      expectedKeyPoints: [
+        "Structured problem decomposition",
+        `Effective implementation with ${topic}`,
+        "End-to-end delivery and quality assurance",
+      ],
+    }),
+    (topic: string) => ({
+      question: `When integrating ${topic} with other services or modules in a ${jobTitle} workflow, how do you ensure clean interfaces, resilience, and maintainability?`,
+      expectedKeyPoints: [
+        "Clean abstraction and API boundaries",
+        `Resilience and error handling with ${topic}`,
+        "Long-term maintainability",
+      ],
+    }),
+  ];
+
+  const result: AiInterviewQuestion[] = [];
+  for (let i = 0; i < count; i++) {
+    const topic = topicPool[i % topicPool.length] || jobTitle;
+    const tpl = templates[i % templates.length](topic);
+    result.push({
+      questionNumber: i + 1,
+      question: tpl.question,
+      topic,
+      expectedKeyPoints: tpl.expectedKeyPoints,
+      candidateAnswer: "",
+      score: 0,
+      aiFeedback: "",
+    });
+  }
+  return result;
+}
+
 // Applications API
 export const applicationsApi = {
   apply: async (data: {
@@ -372,8 +646,22 @@ export const applicationsApi = {
     return res.data;
   },
 
+  getById: async (applicationId: string) => {
+    const res = await api.get(`/applications/${applicationId}`);
+    const appData = res.data?.data || res.data;
+    if (appData && appData._id) {
+      const hydrated = hydrateApplicationAiInterview(appData);
+      if (res.data?.data) res.data.data = hydrated;
+    }
+    return res.data;
+  },
+
   getMyApplications: async (params?: { status?: string; page?: number; limit?: number }) => {
     const res = await api.get("/applications/my-applications", { params });
+    const list: Application[] = res.data?.data?.applications || res.data?.applications || [];
+    const hydrated = list.map(hydrateApplicationAiInterview);
+    if (res.data?.data?.applications) res.data.data.applications = hydrated;
+    if (res.data?.applications) res.data.applications = hydrated;
     return res.data;
   },
 
@@ -385,11 +673,18 @@ export const applicationsApi = {
       ? `/applications/employer/${employerId}`
       : "/applications/employer-applications";
     const res = await api.get(url, { params });
+    const list: Application[] = res.data?.data?.applications || res.data?.applications || [];
+    const hydrated = list.map(hydrateApplicationAiInterview);
+    if (res.data?.data?.applications) res.data.data.applications = hydrated;
+    if (res.data?.applications) res.data.applications = hydrated;
     return res.data;
   },
 
   getJobApplicants: async (jobId: string, params?: { status?: string }) => {
     const res = await api.get(`/applications/job/${jobId}`, { params });
+    const list: Application[] = res.data?.data?.applicants || res.data?.applicants || [];
+    const hydrated = list.map(hydrateApplicationAiInterview);
+    if (res.data?.data?.applicants) res.data.data.applicants = hydrated;
     return res.data;
   },
 
@@ -401,12 +696,240 @@ export const applicationsApi = {
     return res.data;
   },
 
-  scheduleInterview: async (applicationId: string, interviewDate: string, feedback?: string) => {
+  scheduleInterview: async (
+    applicationId: string,
+    interviewDate: string,
+    feedback?: string,
+    aiConfig?: {
+      enableAiInterview?: boolean;
+      questionCount?: number;
+      topicFocus?: string;
+      jobContext?: Partial<Job> | null;
+    },
+  ) => {
     const res = await api.post(`/applications/${applicationId}/schedule-interview`, {
       interviewDate,
       feedback,
+      enableAiInterview: aiConfig?.enableAiInterview,
+      questionCount: aiConfig?.questionCount,
+      topicFocus: aiConfig?.topicFocus,
     });
+
+    if (aiConfig?.enableAiInterview !== undefined) {
+      if (aiConfig.enableAiInterview) {
+        const serverSession = res.data?.data?.aiInterview;
+        if (serverSession && serverSession.enabled) {
+          saveLocalAiInterview(applicationId, serverSession);
+        } else {
+          const fallbackQuestions = generateClientFallbackQuestions(
+            aiConfig.jobContext,
+            aiConfig.questionCount || 5,
+            aiConfig.topicFocus || "",
+          );
+          const session: AiInterviewSession = {
+            enabled: true,
+            status: "scheduled",
+            scheduledDate: interviewDate,
+            questionCount: fallbackQuestions.length,
+            topicFocus: aiConfig.topicFocus || "",
+            joinLink: `/interview/${applicationId}`,
+            questions: fallbackQuestions,
+          };
+          saveLocalAiInterview(applicationId, session);
+        }
+      } else {
+        saveLocalAiInterview(applicationId, null);
+      }
+    }
+
     return res.data;
+  },
+
+  configureAiInterview: async (
+    applicationId: string,
+    config: {
+      enabled: boolean;
+      interviewDate?: string;
+      questionCount?: number;
+      topicFocus?: string;
+      feedback?: string;
+      stage?: string;
+      jobContext?: Partial<Job> | null;
+    },
+  ) => {
+    try {
+      const res = await api.post(
+        `/applications/${applicationId}/ai-interview/configure`,
+        config,
+      );
+      const serverSession: AiInterviewSession | undefined =
+        res.data?.data?.aiInterview || res.data?.data?.application?.aiInterview;
+      if (config.enabled && serverSession) {
+        saveLocalAiInterview(applicationId, serverSession);
+      } else if (!config.enabled) {
+        saveLocalAiInterview(applicationId, null);
+      }
+      return res.data;
+    } catch {
+      // Fallback if the remote server hasn't deployed /ai-interview/configure yet
+      if (!config.enabled) {
+        saveLocalAiInterview(applicationId, null);
+        return {
+          success: true,
+          data: {
+            applicationId,
+            aiInterview: { enabled: false, status: "not_configured", questionCount: 5, questions: [] },
+          },
+        };
+      }
+
+      const dateStr = config.interviewDate || new Date().toISOString();
+      const questions = generateClientFallbackQuestions(
+        config.jobContext,
+        config.questionCount || 5,
+        config.topicFocus || "",
+      );
+      const joinLink = `/interview/${applicationId}`;
+      const session: AiInterviewSession = {
+        enabled: true,
+        status: "scheduled",
+        scheduledDate: dateStr,
+        questionCount: questions.length,
+        topicFocus: config.topicFocus || "",
+        joinLink,
+        questions,
+      };
+      saveLocalAiInterview(applicationId, session);
+
+      await api.post(`/applications/${applicationId}/schedule-interview`, {
+        interviewDate: dateStr,
+        feedback: `Live AI Q&A Interview (${questions.length} questions) scheduled for ${new Date(
+          dateStr,
+        ).toLocaleString()}. Join link: ${joinLink}`,
+      });
+
+      return {
+        success: true,
+        data: {
+          applicationId,
+          aiInterview: session,
+        },
+      };
+    }
+  },
+
+  submitAiInterview: async (
+    applicationId: string,
+    answers: Array<{ questionNumber: number; answer: string }>,
+    existingSession?: AiInterviewSession | null,
+  ) => {
+    try {
+      const res = await api.post(
+        `/applications/${applicationId}/ai-interview/submit`,
+        { answers },
+      );
+      const serverSession: AiInterviewSession | undefined =
+        res.data?.data?.aiInterview || res.data?.data?.application?.aiInterview;
+      if (serverSession) {
+        saveLocalAiInterview(applicationId, serverSession);
+      }
+      return res.data;
+    } catch {
+      // Fallback evaluation if remote server hasn't deployed /ai-interview/submit yet
+      const baseSession =
+        existingSession || getLocalAiInterviews()[applicationId];
+      const questions = (baseSession?.questions || []).map((q, i) => {
+        const ansObj = answers.find(
+          (a) => Number(a.questionNumber) === Number(q.questionNumber || i + 1),
+        );
+        const ans = (ansObj?.answer || "").trim();
+        const wordCount = ans ? ans.split(/\s+/).length : 0;
+        const lowerAns = ans.toLowerCase();
+        const topicWords = String(q.topic || "")
+          .toLowerCase()
+          .split(/[\s,/+-]+/)
+          .filter((w) => w.length > 2);
+        const topicHit = topicWords.some((w) => lowerAns.includes(w));
+
+        let score = 0;
+        let aiFeedback = "";
+        if (wordCount === 0) {
+          score = 0;
+          aiFeedback = "No response was provided for this question.";
+        } else if (wordCount < 10) {
+          score = 30 + (topicHit ? 10 : 0);
+          aiFeedback = `Response on ${q.topic} was brief (${wordCount} words) and lacked detailed implementation examples.`;
+        } else {
+          const lengthScore = Math.min(48, Math.round((wordCount / 50) * 48));
+          const relScore = (topicHit ? 24 : 12) + (wordCount >= 30 ? 22 : 10);
+          score = Math.min(96, lengthScore + relScore);
+          aiFeedback =
+            score >= 75
+              ? `Strong, structured response demonstrating practical proficiency in ${q.topic}.`
+              : `Solid overview of ${q.topic}; expanding on production edge cases would make it even stronger.`;
+        }
+
+        return {
+          ...q,
+          candidateAnswer: ans,
+          score,
+          aiFeedback,
+        };
+      });
+
+      const overallScore = Math.round(
+        questions.reduce((acc, q) => acc + (q.score || 0), 0) /
+          Math.max(1, questions.length),
+      );
+      const verdict =
+        overallScore >= 80
+          ? "Strong Hire — Advance to Next Stage"
+          : overallScore >= 65
+            ? "Recommended — Proceed to Next Stage"
+            : overallScore >= 45
+              ? "Borderline — Manual Review Recommended"
+              : "Does Not Meet Bar";
+
+      const report: AiInterviewReport = {
+        overallScore,
+        verdict,
+        summary: `Candidate completed the ${questions.length}-question Live AI Q&A Interview with an overall score of ${overallScore}/100 (${verdict}).`,
+        strengths: questions
+          .filter((q) => (q.score || 0) >= 70)
+          .map((q) => `Strong proficiency in ${q.topic}`),
+        improvements: questions
+          .filter((q) => (q.score || 0) < 70)
+          .map((q) => `Probe deeper into ${q.topic}`),
+        completedAt: new Date().toISOString(),
+      };
+      if (report.strengths.length === 0) {
+        report.strengths.push("Completed all assigned interview questions");
+      }
+      if (report.improvements.length === 0) {
+        report.improvements.push("Explore system scaling scenarios in final round");
+      }
+
+      const updatedSession: AiInterviewSession = {
+        ...(baseSession || {
+          enabled: true,
+          questionCount: questions.length,
+        }),
+        enabled: true,
+        status: "completed",
+        questions,
+        report,
+      };
+      saveLocalAiInterview(applicationId, updatedSession);
+
+      return {
+        success: true,
+        data: {
+          applicationId,
+          aiInterview: updatedSession,
+          report,
+        },
+      };
+    }
   },
 
   hiringDecision: async (

@@ -272,7 +272,14 @@ export class ApplicationController {
       const applicationId = (
         req.params.id || req.body.applicationId
       )?.toString();
-      const { interviewDate, feedback, stage } = req.body;
+      const {
+        interviewDate,
+        feedback,
+        stage,
+        enableAiInterview,
+        questionCount,
+        topicFocus,
+      } = req.body;
 
       if (!applicationId || !interviewDate) {
         return res.status(400).json({
@@ -281,11 +288,21 @@ export class ApplicationController {
         });
       }
 
+      const aiConfig =
+        enableAiInterview !== undefined
+          ? {
+              enabled: Boolean(enableAiInterview),
+              questionCount,
+              topicFocus,
+            }
+          : null;
+
       const updated = await applicationService.scheduleInterview(
         applicationId,
         interviewDate,
         feedback,
         stage,
+        aiConfig,
       );
 
       return res.status(200).json(
@@ -296,12 +313,100 @@ export class ApplicationController {
             interviewDate: updated.interviewDate,
             currentStatus: updated.status,
             feedback: updated.feedback,
+            aiInterview: updated.aiInterview,
           },
           "Interview scheduled successfully!",
         ),
       );
     } catch (error) {
       return handleControllerError(res, error, "Error scheduling interview");
+    }
+  }
+
+  /**
+   * Configure (Add or Remove) Live AI Q&A Interview for an applicant
+   * POST /api/applications/:id/ai-interview/configure
+   */
+  async configureAiInterview(req, res) {
+    try {
+      const applicationId = (
+        req.params.id || req.body.applicationId
+      )?.toString();
+
+      if (!applicationId) {
+        return res.status(400).json({
+          success: false,
+          message: "Application ID is required",
+        });
+      }
+
+      const updated = await applicationService.configureAiInterview(
+        applicationId,
+        req.body,
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            applicationId: updated._id,
+            application: updated,
+            aiInterview: updated.aiInterview,
+          },
+          updated.aiInterview?.enabled
+            ? "Live AI Q&A Interview generated and candidate notified!"
+            : "Live AI Q&A Interview removed from this application.",
+        ),
+      );
+    } catch (error) {
+      return handleControllerError(
+        res,
+        error,
+        "Error configuring Live AI Q&A Interview",
+      );
+    }
+  }
+
+  /**
+   * Candidate submits answers for Live AI Q&A Interview
+   * POST /api/applications/:id/ai-interview/submit
+   */
+  async submitAiInterview(req, res) {
+    try {
+      const applicationId = (
+        req.params.id || req.body.applicationId
+      )?.toString();
+
+      if (!applicationId) {
+        return res.status(400).json({
+          success: false,
+          message: "Application ID is required",
+        });
+      }
+
+      const updated = await applicationService.submitAiInterview(applicationId, {
+        answers: req.body.answers,
+        candidateId: req.user?._id || req.body.candidateId,
+      });
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            applicationId: updated._id,
+            application: updated,
+            aiInterview: updated.aiInterview,
+            report: updated.aiInterview?.report,
+          },
+          "Interview submitted and evaluated by AI!",
+        ),
+      );
+    } catch (error) {
+      return handleControllerError(
+        res,
+        error,
+        "Error submitting and evaluating AI interview",
+      );
     }
   }
 
