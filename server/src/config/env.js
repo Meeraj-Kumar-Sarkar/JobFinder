@@ -13,8 +13,9 @@ export const env = {
   MONGODB_URI: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/jobportal",
 
 
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
-  RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+  BREVO_API_KEY: process.env.BREVO_API_KEY || "",
+  BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL || "",
+  BREVO_SENDER_NAME: process.env.BREVO_SENDER_NAME || "JobFinder Recruitment",
 
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || "",
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || "",
