@@ -77,30 +77,50 @@ function CandidateDashboard() {
     }
   }, [user]);
 
-  const fetchApplications = async () => {
+  const fetchApplications = async (overrideUser?: typeof user) => {
+    const activeUser = overrideUser ?? user;
     setLoading(true);
     try {
-      const [res, notifResult, recRes] = await Promise.all([
-        applicationsApi.getMyApplications(),
-        fetchUnifiedNotifications(user),
-        user?._id
-          ? jobsApi.getRecommended(user._id, { limit: 10 }, user)
+      const [appsResult, notifResult, recResult] = await Promise.allSettled([
+        applicationsApi.getMyApplications(
+          activeUser?._id ? { candidateId: activeUser._id } : undefined,
+        ),
+        fetchUnifiedNotifications(activeUser),
+        activeUser?._id
+          ? jobsApi.getRecommended(activeUser._id, { limit: 10 }, activeUser)
           : Promise.resolve({ data: { jobs: [] } }),
       ]);
-      const list = res?.data?.applications || res?.data || [];
-      setApplications(list);
-      setUnreadCount(notifResult.unreadCount);
-      setRecommendedJobs(recRes?.data?.jobs || []);
-    } catch (err) {
-      console.error("Error loading candidate applications:", err);
+
+      if (appsResult.status === "fulfilled") {
+        const res = appsResult.value;
+        const list = res?.data?.applications || res?.data || [];
+        setApplications(Array.isArray(list) ? list : []);
+      } else {
+        console.error("Error loading candidate applications:", appsResult.reason);
+      }
+
+      if (notifResult.status === "fulfilled") {
+        setUnreadCount(notifResult.value.unreadCount);
+      } else {
+        console.error("Error loading candidate notifications:", notifResult.reason);
+      }
+
+      if (recResult.status === "fulfilled") {
+        const jobs = recResult.value?.data?.jobs || [];
+        setRecommendedJobs(Array.isArray(jobs) ? jobs : []);
+      } else {
+        console.error("Error loading recommended jobs:", recResult.reason);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (user?._id) {
+      fetchApplications(user);
+    }
+  }, [user?._id]);
 
   const handleWithdraw = async (applicationId: string) => {
     if (!window.confirm("Are you sure you want to withdraw this application?")) {
@@ -140,9 +160,10 @@ function CandidateDashboard() {
       });
 
       const updated = res.data?.user || res.data;
+      const mergedUser = user ? { ...user, ...updated } : updated;
       updateUser(updated);
       toast.success("Profile & AI recommendation preferences updated!");
-      fetchApplications();
+      fetchApplications(mergedUser);
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to update profile.";
       toast.error(msg);
@@ -395,7 +416,7 @@ function CandidateDashboard() {
                   </p>
                 </div>
                 <button
-                  onClick={fetchApplications}
+                  onClick={() => fetchApplications()}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -659,7 +680,7 @@ function CandidateDashboard() {
                 </div>
 
                 <button
-                  onClick={fetchApplications}
+                  onClick={() => fetchApplications()}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />

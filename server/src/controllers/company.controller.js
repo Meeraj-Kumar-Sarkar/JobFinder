@@ -21,7 +21,7 @@ const handleCompanyError = (res, error, defaultMessage) => {
 export class CompanyController {
   async createCompany(req, res) {
     try {
-      const ownerId = (req.user?._id || req.body.owner)?.toString();
+      const ownerId = (req.user?._id || req.body?.owner)?.toString();
       const company = await companyService.createCompany(req.body, ownerId);
       return res
         .status(201)

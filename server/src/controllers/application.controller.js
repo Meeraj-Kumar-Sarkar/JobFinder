@@ -81,11 +81,11 @@ export class ApplicationController {
   async getCandidateApplications(req, res) {
     try {
       const candidateId =
-        req.query.candidateId?.toString() ||
-        req.params.candidateId ||
-        req.body.candidateId ||
-        req.body.candidate ||
-        req.user?._id;
+        req.user?._id?.toString() ||
+        req.query?.candidateId?.toString() ||
+        req.params?.candidateId ||
+        req.body?.candidateId ||
+        req.body?.candidate;
 
       if (!candidateId) {
         return res.status(400).json({
@@ -125,7 +125,7 @@ export class ApplicationController {
   async getJobApplications(req, res) {
     try {
       const jobId =
-        req.params.jobId || req.query.jobId?.toString() || req.body.jobId;
+        req.params?.jobId || req.query?.jobId?.toString() || req.body?.jobId;
 
       if (!jobId) {
         return res.status(400).json({
@@ -162,9 +162,9 @@ export class ApplicationController {
   async getEmployerApplications(req, res) {
     try {
       const employerId =
-        req.params.employerId ||
-        req.query.employerId?.toString() ||
-        req.body.employerId ||
+        req.params?.employerId ||
+        req.query?.employerId?.toString() ||
+        req.body?.employerId ||
         req.user?._id;
 
       if (!employerId) {
@@ -199,10 +199,10 @@ export class ApplicationController {
   async getApplicationById(req, res) {
     try {
       const applicationId = (
-        req.params.id ||
-        req.params.applicationId ||
-        req.query.applicationId ||
-        req.body.applicationId
+        req.params?.id ||
+        req.params?.applicationId ||
+        req.query?.applicationId ||
+        req.body?.applicationId
       )?.toString();
 
       if (!applicationId) {
@@ -453,9 +453,9 @@ export class ApplicationController {
   async withdrawApplication(req, res) {
     try {
       const applicationId = (
-        req.params.id || req.body.applicationId
+        req.params?.id || req.body?.applicationId
       )?.toString();
-      const candidateId = req.body.candidateId || req.user?._id;
+      const candidateId = req.user?._id || req.body?.candidateId;
 
       if (!applicationId) {
         return res.status(400).json({

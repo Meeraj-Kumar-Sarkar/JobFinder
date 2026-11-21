@@ -83,6 +83,14 @@ app.use(
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
+// Express 5 leaves req.body undefined on bodyless requests (GET/DELETE); normalize to {}
+app.use((req, _res, next) => {
+  if (req.body === undefined) {
+    req.body = {};
+  }
+  next();
+});
+
 // 4. NoSQL Injection & Prototype Pollution Sanitizer
 app.use(sanitizeRequest);
 

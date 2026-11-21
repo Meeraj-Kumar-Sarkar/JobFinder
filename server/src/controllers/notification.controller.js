@@ -191,7 +191,7 @@ export class NotificationController {
    */
   async markAllAsRead(req, res) {
     try {
-      const userId = (req.user?._id || req.body.userId)?.toString();
+      const userId = (req.user?._id || req.body?.userId)?.toString();
       if (!userId || !isValidObjectId(userId)) {
         return res.status(401).json({
           success: false,

@@ -148,11 +148,11 @@ export const requireCompanyAccess = (requiredPermission = null) => {
 
       // Determine the target company ID from params, body, query, or user's assigned company
       const companyId =
-        req.params.companyId ||
-        req.params.id ||
-        req.body.companyId ||
-        req.body.company ||
-        req.query.companyId ||
+        req.params?.companyId ||
+        req.params?.id ||
+        req.body?.companyId ||
+        req.body?.company ||
+        req.query?.companyId ||
         req.user.company;
 
       if (!companyId || !isValidObjectId(companyId)) {

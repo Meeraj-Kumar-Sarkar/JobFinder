@@ -430,10 +430,11 @@ export const jobsApi = {
         },
       };
     } catch {
-      // Fallback if the remote server hasn't deployed /jobs/recommend yet:
-      // Run the exact same weighted JobQueue recommendation formula on active jobs
+      // Fallback if /jobs/recommend fails or isn't deployed yet:
+      // Fetch standard chronological active jobs (sort: "newest" bypasses server-side recommendation)
+      // and run the exact same weighted JobQueue recommendation formula on the client.
       const normalRes = await api.get("/jobs", {
-        params: { ...params, limit: 50 },
+        params: { ...params, sort: "newest", limit: 50 },
       });
       const allJobs: Job[] =
         normalRes.data?.data?.jobs || normalRes.data?.jobs || [];
@@ -656,8 +657,30 @@ export const applicationsApi = {
     return res.data;
   },
 
-  getMyApplications: async (params?: { status?: string; page?: number; limit?: number }) => {
-    const res = await api.get("/applications/my-applications", { params });
+  getMyApplications: async (params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    candidateId?: string;
+  }) => {
+    let resolvedCandidateId = params?.candidateId;
+    if (!resolvedCandidateId) {
+      try {
+        const saved = localStorage.getItem("jobportal_user");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?._id) resolvedCandidateId = parsed._id;
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    const queryParams = resolvedCandidateId
+      ? { ...params, candidateId: resolvedCandidateId }
+      : params;
+    const res = await api.get("/applications/my-applications", {
+      params: queryParams,
+    });
     const list: Application[] = res.data?.data?.applications || res.data?.applications || [];
     const hydrated = list.map(hydrateApplicationAiInterview);
     if (res.data?.data?.applications) res.data.data.applications = hydrated;

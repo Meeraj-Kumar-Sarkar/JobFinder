@@ -37,7 +37,13 @@ export const call_Genai = async (prompt, options = {}) => {
     if (!model) {
       return null;
     }
-    const response = await model.invoke(prompt);
+    const timeoutMs = Number(options.timeoutMs) || 8000;
+    const response = await Promise.race([
+      model.invoke(prompt),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("AI request timed out")), timeoutMs),
+      ),
+    ]);
     return await parse.invoke(response);
   } catch (err) {
     console.log("Ai model ERROR", err?.message || err);
